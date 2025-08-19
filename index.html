@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>V</text></svg>">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vault</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Fonts */
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900;1,6..12,400&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+      
+      :root {
+        --font-sans: 'Inter', sans-serif;
+        --brand-red: #E50914;
+        --brand-red-glow: rgba(229, 9, 20, 0.4);
+        --brand-black: #0A0A0A;
+        --brand-gray: #181818;
+        --brand-light-gray: #282828;
+        --text-primary: #EAEAEA;
+        --text-secondary: #888888;
+        --background-color: var(--brand-black);
+        --player-accent-color: var(--brand-red);
+      }
+      
+      html {
+        font-family: var(--font-sans);
+        background-color: var(--background-color);
+        color: var(--text-primary);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        transition: background-color 0.3s ease;
+      }
+
+      /* DITHER THEME STYLES */
+      [data-theme="dither"] {
+        --font-sans: 'VT323', monospace;
+        --brand-red: #00FF00; /* Bright Green */
+        --brand-red-glow: rgba(0, 255, 0, 0.3);
+        --brand-black: #000000;
+        --brand-gray: #111111;
+        --brand-light-gray: #222222;
+        --text-primary: #00FF00;
+        --text-secondary: #008F00;
+        --background-color: #000000;
+        -webkit-font-smoothing: none;
+        -moz-osx-font-smoothing: none;
+      }
+      
+      [data-theme="dither"] body {
+        background-image: radial-gradient(var(--brand-gray) 1px, transparent 0);
+        background-size: 4px 4px;
+        background-position: -19px -19px;
+      }
+      
+      [data-theme="dither"] button,
+      [data-theme="dither"] input[type="text"],
+      [data-theme="dither"] input[type="search"] {
+        border: 2px solid;
+        border-color: #333 #000 #000 #333;
+        background-color: var(--brand-gray);
+        box-shadow: inset 2px 2px 0 #444, inset -2px -2px 0 #000;
+      }
+      
+      [data-theme="dither"] button:hover {
+        background-color: var(--brand-light-gray);
+      }
+
+      [data-theme="dither"] button:active {
+        border-color: #000 #333 #333 #000;
+        box-shadow: inset -2px -2px 0 #444, inset 2px 2px 0 #000;
+      }
+
+      [data-theme="dither"] input:focus {
+        outline: 1px dotted var(--brand-red);
+        outline-offset: -3px;
+      }
+
+      [data-theme="dither"] .range-thumb::-webkit-slider-thumb,
+      [data-theme="dither"] .range-thumb-sm::-webkit-slider-thumb {
+          background: var(--player-accent-color, var(--brand-red));
+          border: 1px solid var(--text-secondary);
+          width: 14px;
+          height: 14px;
+          box-shadow: none;
+      }
+      [data-theme="dither"] ::-webkit-scrollbar-thumb {
+          background-color: var(--text-secondary) !important;
+          border-radius: 0 !important;
+      }
+
+      /* DREAMSCAPE THEME STYLES */
+      [data-theme="dreamscape"] {
+        --font-sans: 'Nunito Sans', sans-serif;
+        --brand-red: #A78BFA; /* Lavender */
+        --brand-red-glow: rgba(167, 139, 250, 0.4);
+        --brand-black: #F0F4F8; /* Light blue-gray background */
+        --brand-gray: #FFFFFF;
+        --brand-light-gray: #E3E8EE;
+        --text-primary: #2D3748;
+        --text-secondary: #718096;
+        --background-color: #F0F4F8;
+        color: var(--text-primary);
+      }
+      [data-theme="dreamscape"] body {
+          background-image: linear-gradient(to top, #dfe9f3 0%, white 100%);
+      }
+      [data-theme="dreamscape"] .bg-brand-black { background-color: var(--brand-black); }
+      [data-theme="dreamscape"] .bg-brand-gray { background-color: var(--brand-gray); }
+      [data-theme="dreamscape"] .bg-brand-light-gray { background-color: var(--brand-light-gray); }
+      [data-theme="dreamscape"] .text-white { color: var(--text-primary); }
+      [data-theme="dreamscape"] .text-gray-300 { color: var(--text-secondary); }
+      [data-theme="dreamscape"] .text-gray-400 { color: #A0AEC0; }
+      [data-theme="dreamscape"] .text-gray-500 { color: #CBD5E0; }
+      [data-theme="dreamscape"] [class*="bg-brand-black/"], 
+      [data-theme="dreamscape"] [class*="bg-black/"] {
+          background-color: rgba(255, 255, 255, 0.6) !important;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+      }
+      [data-theme="dreamscape"] .backdrop-blur-lg, 
+      [data-theme="dreamscape"] .backdrop-blur-sm,
+      [data-theme="dreamscape"] .backdrop-blur-md { --tw-backdrop-blur: blur(0); }
+      [data-theme="dreamscape"] .border-white\/10 { border-color: rgba(0,0,0,0.05); }
+      [data-theme="dreamscape"] .shadow-lg, [data-theme="dreamscape"] .rounded-lg, [data-theme="dreamscape"] .rounded-md, [data-theme="dreamscape"] .rounded-2xl { 
+        box-shadow: 0 10px 25px -5px rgba(167, 139, 250, 0.2), 0 8px 10px -6px rgba(167, 139, 250, 0.2);
+      }
+      [data-theme="dreamscape"] .hover\:shadow-xl:hover { 
+        box-shadow: 0 20px 35px -8px rgba(167, 139, 250, 0.25), 0 10px 15px -8px rgba(167, 139, 250, 0.25);
+       }
+      [data-theme="dreamscape"] ::-webkit-scrollbar-thumb { background-color: var(--brand-light-gray) !important; border-radius: 10px !important; }
+      [data-theme="dreamscape"] .range-thumb::-webkit-slider-thumb,
+      [data-theme="dreamscape"] .range-thumb-sm::-webkit-slider-thumb { background: var(--player-accent-color, var(--brand-red)); box-shadow: 0 0 5px var(--brand-red-glow); }
+      [data-theme="dreamscape"] .footer-glow { color: var(--brand-red); -webkit-text-stroke: 0; text-shadow: 0 0 45px var(--brand-red-glow), 0 0 20px var(--brand-red); }
+      
+      /* FOOTER */
+      .footer-glow {
+        color: transparent;
+        -webkit-text-stroke: 1px var(--brand-red);
+        text-shadow: 0 0 15px var(--brand-red-glow);
+        mask-image: linear-gradient(to bottom, black 30%, transparent 80%);
+        -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%);
+        font-size: 35vw;
+        line-height: 1;
+      }
+      [data-theme="dither"] .footer-glow {
+        -webkit-text-stroke: 1px var(--brand-red);
+        text-shadow: 0 0 10px var(--brand-red-glow);
+      }
+
+      /* CINEMATIC PLAYER STYLES */
+      .theater-mode-dim {
+        position: fixed;
+        inset: 0;
+        background-color: black;
+        opacity: 0;
+        z-index: 48; /* Just below ambilight */
+        transition: opacity 0.5s ease-in-out;
+        pointer-events: none;
+      }
+      .theater-mode-dim.is-active {
+        opacity: 0.85;
+      }
+      .player-ambilight-bg {
+        position: fixed;
+        top: -10%; left: -10%;
+        width: 120%; height: 120%;
+        background-size: cover;
+        background-position: center;
+        filter: blur(50px) brightness(0.6);
+        opacity: 0;
+        transition: opacity 0.5s ease-in-out;
+        z-index: 49;
+      }
+      .player-container {
+        opacity: 0;
+        transform: scale(0.95);
+        transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+      }
+      .player-container.is-visible {
+        opacity: 1;
+        transform: scale(1);
+      }
+      
+      /* Grand Opening Animation */
+      @keyframes grand-opening {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .player-opening {
+        animation: grand-opening 0.5s ease-in-out forwards;
+      }
+
+      /* Title Card Animation */
+      @keyframes title-card-fade {
+        0% { opacity: 0; transform: translateY(10px); }
+        20% { opacity: 1; transform: translateY(0); }
+        80% { opacity: 1; transform: translateY(0); }
+        100% { opacity: 0; transform: translateY(-10px); }
+      }
+      .player-title-card {
+        animation: title-card-fade 5s ease-in-out forwards;
+      }
+
+      .player-controls {
+        transition: opacity 0.3s ease, transform 0.3s ease;
+      }
+      .player-controls-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .player-controls-hidden .player-top-bar {
+        transform: translateY(-100%);
+      }
+      .player-controls-hidden .player-bottom-bar {
+        transform: translateY(100%);
+      }
+
+      /* Total UI Theming */
+      .player-themed-button {
+        color: var(--text-primary);
+        transition: color 0.2s ease;
+      }
+      .player-themed-button:hover:not(:disabled) {
+        color: var(--player-accent-color, var(--brand-red));
+      }
+      .player-themed-button:disabled {
+        color: #555;
+        cursor: not-allowed;
+      }
+      .player-active-button {
+        color: var(--player-accent-color, var(--brand-red));
+      }
+      .player-active-bg {
+        background-color: var(--player-accent-color, var(--brand-red));
+      }
+      .player-active-bg-light {
+        background-color: color-mix(in srgb, var(--player-accent-color, var(--brand-red)) 80%, transparent);
+      }
+
+      .film-grain-overlay {
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        pointer-events: none;
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyCAMAAAAp4XiDAAAAUVBMVEWFhYWDg4N3d3dtbW17e3t1dXVדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדהדה"
+        );
+        animation: grain 0.3s steps(1) infinite;
+        opacity: 0.1;
+      }
+      @keyframes grain {
+        0%, 100% { transform: translate(0, 0); }
+        10% { transform: translate(-1%, -1%); }
+        20% { transform: translate(1%, 1%); }
+        30% { transform: translate(-2%, 2%); }
+        40% { transform: translate(2%, -1%); }
+        50% { transform: translate(-1%, 2%); }
+        60% { transform: translate(2%, 1%); }
+        70% { transform: translate(-2%, -2%); }
+        80% { transform: translate(1%, -2%); }
+        90% { transform: translate(-1%, 1%); }
+      }
+      .letterbox-overlay {
+        position: absolute;
+        left: 0; right: 0;
+        height: 12.5%; /* Creates a ~2.35:1 aspect ratio on a 16:9 screen */
+        background-color: black;
+        pointer-events: none;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                mono: ['VT323', 'monospace'],
+            },
+            colors: {
+              'brand-red': 'var(--brand-red)',
+              'brand-black': 'var(--brand-black)',
+              'brand-gray': 'var(--brand-gray)',
+              'brand-light-gray': 'var(--brand-light-gray)',
+            },
+          },
+        },
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^18.2.0",
+    "react-dom/": "https://esm.sh/react-dom@^18.2.0/",
+    "react/": "https://esm.sh/react@^18.2.0/",
+    "idb": "https://esm.sh/idb@^8.0.3"
+  }
+}
+</script>
+</head>
+  <body class="bg-brand-black text-white">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
