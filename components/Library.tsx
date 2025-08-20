@@ -71,7 +71,9 @@ export const Library: React.FC<LibraryProps> = ({
 }) => {
 
   const displayedMedia = useMemo(() => {
-    return showHidden ? media : media.filter(v => !v.isHidden);
+    // Filter out media that browser can't play, then apply user's visibility settings.
+    const playableMedia = media.filter(v => v.isPlayable !== false);
+    return showHidden ? playableMedia : playableMedia.filter(v => !v.isHidden);
   }, [media, showHidden]);
 
   const searchFilteredMedia = useMemo(() => {
@@ -91,17 +93,36 @@ export const Library: React.FC<LibraryProps> = ({
   }, [categoryTree, selectedCategoryPath]);
   
   const heroMedia = useMemo(() => {
-    if (displayedMedia.length === 0 || selectedCategoryPath || selectedTag) return null;
-    const favorites = displayedMedia.filter(v => v.isFavorite && v.poster);
-    const source = favorites.length > 0 ? favorites : displayedMedia.filter(v => v.poster);
-    if (source.length > 0) return source[Math.floor(Math.random() * source.length)];
-    return displayedMedia.length > 0 ? displayedMedia[Math.floor(Math.random() * displayedMedia.length)] : null;
-  }, [displayedMedia, selectedCategoryPath, selectedTag]);
+    if (displayedMedia.length === 0) return null;
+
+    let sourcePool: VideoFile[] = displayedMedia; // Default to all displayed media
+
+    if (currentCategoryNode) {
+        const nodeMediaPaths = new Set(getAllMediaFromNode(currentCategoryNode).map(m => m.fullPath));
+        sourcePool = displayedMedia.filter(m => nodeMediaPaths.has(m.fullPath));
+    } else if (isFavoritesView) {
+        sourcePool = displayedMedia.filter(v => v.isFavorite);
+    } else if (selectedTag) {
+        sourcePool = displayedMedia.filter(v => v.tags?.includes(selectedTag));
+    } else if (searchQuery) {
+        sourcePool = searchFilteredMedia;
+    }
+
+    const withPosters = sourcePool.filter(v => v.poster);
+    const selectionPool = withPosters.length > 0 ? withPosters : sourcePool;
+
+    if (selectionPool.length > 0) {
+        return selectionPool[Math.floor(Math.random() * selectionPool.length)];
+    }
+    
+    // Final fallback to any displayed media if current view is empty for some reason
+    return displayedMedia[Math.floor(Math.random() * displayedMedia.length)];
+  }, [displayedMedia, currentCategoryNode, selectedTag, isFavoritesView, searchQuery, searchFilteredMedia]);
 
   const getMediaForNode = (node: CategoryNode): VideoFile[] => {
     const allNodeMedia = getAllMediaFromNode(node);
     // The order is preserved from the main media array, which is stable.
-    return showHidden ? allNodeMedia : allNodeMedia.filter(v => !v.isHidden);
+    return displayedMedia.filter(m => allNodeMedia.some(nm => nm.fullPath === m.fullPath));
   };
 
   // Show full-screen loader only on initial scan before any media are listed
@@ -118,11 +139,35 @@ export const Library: React.FC<LibraryProps> = ({
     );
   }
 
-  const renderRailsForNodes = (nodes: CategoryNode[]) => {
+  const renderCategorySections = (nodes: CategoryNode[], forceRail: boolean = false) => {
     return nodes.flatMap((node) => {
       const mediaForNode = getMediaForNode(node);
       if (mediaForNode.length === 0) return [];
 
+      // If a category has no sub-folders and we are NOT forcing a rail, display its contents in a grid.
+      if (!forceRail && node.children.length === 0) {
+        return [(
+          <section key={node.path} className="space-y-4">
+            <h2 
+              className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-brand-red transition-colors"
+              onClick={() => onSelectCategory(node.path)}
+            >
+              {node.name}
+            </h2>
+            <VideoGrid 
+              media={mediaForNode}
+              onSelectVideo={onSelectVideo}
+              onToggleFavorite={onToggleFavorite}
+              onToggleHidden={onToggleHidden}
+              onUpdateTags={onUpdateTags}
+              onUnsupportedMedia={onUnsupportedMedia}
+              onPrioritizeMedia={onPrioritizeMedia}
+            />
+          </section>
+        )];
+      }
+
+      // Otherwise (it's a branch OR we are forcing a rail), display its content as one or more rails.
       const CHUNK_THRESHOLD = 7;
       if (mediaForNode.length < CHUNK_THRESHOLD) {
         return [<Rail
@@ -142,7 +187,7 @@ export const Library: React.FC<LibraryProps> = ({
       
       const numChunks = mediaForNode.length < (CHUNK_THRESHOLD * 2) ? 2 : 3;
       const mediaChunks = chunkArray(mediaForNode, numChunks);
-      const romanNumerals = ['I.', 'II.', 'III.'];
+      const romanNumerals = ['I', 'II', 'III'];
 
       return mediaChunks.map((chunk, index) => {
           const title = numChunks > 1 ? `${node.name} ${romanNumerals[index]}` : node.name;
@@ -173,7 +218,7 @@ export const Library: React.FC<LibraryProps> = ({
       .slice(0, 20);
 
     return (
-      <div className="space-y-8">
+      <div className="space-y-12">
         {continueWatching.length > 0 && (
           <Rail
             title="Continue Watching"
@@ -188,7 +233,7 @@ export const Library: React.FC<LibraryProps> = ({
             onClear={onClearContinueWatching}
           />
         )}
-        {favorites.length > 0 && !isFavoritesView && !selectedCategoryPath && !searchQuery && !selectedTag &&(
+        {favorites.length > 0 && (
           <Rail
             title="Favorites"
             videos={favorites}
@@ -201,7 +246,7 @@ export const Library: React.FC<LibraryProps> = ({
             onPrioritizeMedia={onPrioritizeMedia}
           />
         )}
-        {renderRailsForNodes(categoryTree)}
+        {renderCategorySections(categoryTree, true)}
       </div>
     );
   };
@@ -216,48 +261,65 @@ export const Library: React.FC<LibraryProps> = ({
     if (selectedTag) {
       return <VideoGrid media={displayedMedia.filter(v => v.tags?.includes(selectedTag))} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onToggleHidden={onToggleHidden} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
     }
+    
     if (currentCategoryNode) {
-      const filesInFolder = showHidden
-        ? currentCategoryNode.media 
-        : currentCategoryNode.media.filter(v => !v.isHidden);
-
-      return (
-        <>
-          <Breadcrumbs path={selectedCategoryPath || ''} onSelectCategory={onSelectCategory} onGoHome={onGoHome} />
-          <div className="space-y-8 mt-4">
-            {filesInFolder.length > 0 && (
-              <Rail
-                title={`Files in ${currentCategoryNode.name}`}
-                videos={filesInFolder}
+      // If the currently selected category is a LEAF node, display a single grid of its content.
+      if (currentCategoryNode.children.length === 0) {
+        return (
+          <>
+            <Breadcrumbs path={selectedCategoryPath || ''} onSelectCategory={onSelectCategory} onGoHome={onGoHome} />
+            <div className="mt-4">
+              <VideoGrid
+                media={getMediaForNode(currentCategoryNode)}
                 onSelectVideo={onSelectVideo}
                 onToggleFavorite={onToggleFavorite}
                 onToggleHidden={onToggleHidden}
                 onUpdateTags={onUpdateTags}
-                onSelectCategory={onSelectCategory}
                 onUnsupportedMedia={onUnsupportedMedia}
                 onPrioritizeMedia={onPrioritizeMedia}
               />
+            </div>
+          </>
+        );
+      }
+
+      // If the currently selected category is a BRANCH node:
+      const filesInFolder = displayedMedia.filter(v => v.parentPath === currentCategoryNode.path);
+
+      return (
+        <>
+          <Breadcrumbs path={selectedCategoryPath || ''} onSelectCategory={onSelectCategory} onGoHome={onGoHome} />
+          <div className="space-y-12 mt-4">
+            {/* 1. Show a rail for files directly inside this branch */}
+            {filesInFolder.length > 0 && (
+                <Rail
+                    title={`Files in ${currentCategoryNode.name}`}
+                    videos={filesInFolder}
+                    onSelectVideo={onSelectVideo}
+                    onToggleFavorite={onToggleFavorite}
+                    onToggleHidden={onToggleHidden}
+                    onUpdateTags={onUpdateTags}
+                    onUnsupportedMedia={onUnsupportedMedia}
+                    onPrioritizeMedia={onPrioritizeMedia}
+                    onSelectCategory={() => {}} // This rail's title is not for navigation
+                    categoryPath={undefined}
+                />
             )}
-            {renderRailsForNodes(currentCategoryNode.children)}
+            {/* 2. Render its children, allowing leaf children to become grids */}
+            {renderCategorySections(currentCategoryNode.children, false)}
           </div>
         </>
       );
     }
     
-    // Default home view with Hero and Rails
-    return (
-      <>
-        {heroMedia && <Hero video={heroMedia} onPlay={() => onSelectVideo(heroMedia)} />}
-        <div className="p-4 md:p-8">
-          {renderHomeRails()}
-        </div>
-      </>
-    );
+    // Default home view
+    return renderHomeRails();
   }
 
   return (
     <div>
-      <div className={`p-4 md:p-8 ${heroMedia || selectedCategoryPath ? '' : 'pt-8'}`}>
+      {heroMedia && <Hero video={heroMedia} onPlay={() => onSelectVideo(heroMedia)} />}
+      <div className={`p-4 md:p-8 ${!heroMedia ? 'pt-8' : ''}`}>
         {renderContent()}
       </div>
     </div>

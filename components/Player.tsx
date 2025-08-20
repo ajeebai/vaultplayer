@@ -27,6 +27,8 @@ const PlaylistIcon: React.FC<{className?: string}> = ({className}) => (<svg xmln
 const VideoPlaceholderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.66-1.34-3-3-3s-3 1.34-3 3v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V6h1v4.5c0 1.38-1.12 2.5-2.5 2.5S10 11.88 10 10.5V7c0-2.21 1.79-4 4-4s4 1.79 4 4v3.5c0 1.93-1.57 3.5-3.5 3.5S11 15.43 11 13.5V6H9.5v7.5c0 2.76 2.24 5 5 5s5-2.24 5-5V7h-1.5v3.5z"/></svg>);
 const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>);
 const ReturnIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7h-2z"></path></svg>);
+const PipEnterIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19,11H11V17H19V11M23,19V4.97C23,3.87,22.1,3,21.03,3H2.97C1.87,3,1,3.87,1,4.97V19C1,20.1,1.87,21,2.97,21H21.03C22.1,21,23,20.1,23,19M21,19H3V4.97H21V19Z"/></svg>);
+const PipExitIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19,19H5V5H12V7H7V17H17V12H19V19M19,3H13V5H15.59L12,8.59L13.41,10L17,6.41V9H19V3Z" /></svg>);
 
 
 interface PlayerProps {
@@ -133,6 +135,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSubtitleMenuOpen, setIsSubtitleMenuOpen] = useState(false);
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
+  const [isPip, setIsPip] = useState(false);
   const [activeTrackLabel, setActiveTrackLabel] = useState<string | null>(null);
   const [playlistPath, setPlaylistPath] = useState(initialVideo.parentPath);
   const [isVisible, setIsVisible] = useState(false);
@@ -144,6 +147,8 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const subtitleMenuRef = useRef<HTMLDivElement>(null);
   const subtitleInputRef = useRef<HTMLInputElement>(null);
   const db = useMemo(() => new MediaDB(), []);
+
+  const isPipSupported = useMemo(() => 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled, []);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
@@ -304,6 +309,26 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     };
   }, [video]);
 
+  // PiP event listeners
+  useEffect(() => {
+    const videoElement = videoRef.current;
+    if (!videoElement) return;
+
+    const onEnterPip = () => setIsPip(true);
+    const onLeavePip = () => setIsPip(false);
+    
+    videoElement.addEventListener('enterpictureinpicture', onEnterPip);
+    videoElement.addEventListener('leavepictureinpicture', onLeavePip);
+
+    // Sync state on load, in case PiP was already active
+    setIsPip(document.pictureInPictureElement === videoElement);
+
+    return () => {
+        videoElement.removeEventListener('enterpictureinpicture', onEnterPip);
+        videoElement.removeEventListener('leavepictureinpicture', onLeavePip);
+    };
+  }, [videoSrc]);
+
   useEffect(() => {
     showControls();
     
@@ -364,6 +389,22 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
       document.exitFullscreen();
     }
   }, []);
+
+  const togglePip = useCallback(async () => {
+    showControls();
+    if (!videoRef.current || !isPipSupported) return;
+    try {
+        if (document.pictureInPictureElement === videoRef.current) {
+            await document.exitPictureInPicture();
+            setIsPip(false);
+        } else {
+            await videoRef.current.requestPictureInPicture();
+            setIsPip(true);
+        }
+    } catch (err) {
+        console.error("PiP Error:", err);
+    }
+  }, [isPipSupported, showControls]);
 
   const handleVideoAreaClick = () => {
     if (isPlaylistOpen) {
@@ -463,13 +504,14 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
       
       showControls();
 
-      switch (e.key) {
+      switch (e.key.toLowerCase()) {
         case ' ': e.preventDefault(); togglePlay(); break;
         case 'f': toggleFullscreen(); break;
+        case 'p': e.preventDefault(); togglePip(); break;
         case 'm': toggleMute(); break;
-        case 'ArrowRight': seek(10); break;
-        case 'ArrowLeft': seek(-10); break;
-        case 'ArrowUp':
+        case 'arrowright': seek(10); break;
+        case 'arrowleft': seek(-10); break;
+        case 'arrowup':
           e.preventDefault();
           if (videoRef.current) {
             const newVolume = Math.min(1, videoRef.current.volume + 0.1);
@@ -478,7 +520,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
             setIsMuted(newVolume === 0);
           }
           break;
-        case 'ArrowDown':
+        case 'arrowdown':
           e.preventDefault();
           if (videoRef.current) {
             const newVolume = Math.max(0, videoRef.current.volume - 0.1);
@@ -487,7 +529,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
             setIsMuted(newVolume === 0);
           }
           break;
-        case 'Escape':
+        case 'escape':
           if (isPlaylistOpen) setIsPlaylistOpen(false);
           else if (document.fullscreenElement) document.exitFullscreen();
           else handleClose();
@@ -499,7 +541,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [togglePlay, toggleFullscreen, toggleMute, seek, showControls, isPlaylistOpen, handleClose]);
+  }, [togglePlay, toggleFullscreen, togglePip, toggleMute, seek, showControls, isPlaylistOpen, handleClose]);
 
 
   if (error) {
@@ -653,6 +695,11 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                       {(allVideos.length > 1) && (
                         <button onClick={(e) => { e.stopPropagation(); setIsPlaylistOpen(o => !o); }} className={`player-themed-button ${isPlaylistOpen ? 'player-active-button' : ''}`}>
                             <PlaylistIcon className="w-7 h-7" />
+                        </button>
+                      )}
+                      {isPipSupported && (
+                        <button onClick={togglePip} className="player-themed-button" title="Picture-in-Picture (p)">
+                          {isPip ? <PipExitIcon className="w-7 h-7"/> : <PipEnterIcon className="w-7 h-7"/>}
                         </button>
                       )}
                       <button onClick={toggleFullscreen} className="player-themed-button">

@@ -3,7 +3,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import { MediaDB, VideoFile } from '../services/db';
 
 const workerCode = `
-  const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'avi', 'ts', 'm2ts', 'mpg'];
+  const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'ts', 'm2ts', 'mpg'];
   const SUBTITLE_EXTENSIONS = ['srt', 'vtt'];
 
   async function* getFileHandlesRecursively(directoryHandle) {
