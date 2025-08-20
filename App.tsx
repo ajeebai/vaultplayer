@@ -84,44 +84,66 @@ const ManageLibrariesModal: React.FC<{
   );
 };
 
-const UnsupportedMediaModal: React.FC<{ media: VideoFile; onClose: () => void }> = ({ media, onClose }) => {
-  const handleDownload = async () => {
-    try {
-        const handle = media.fileHandle;
-        const file = await handle.getFile();
-        const url = URL.createObjectURL(file);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = file.name;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    } catch (e) {
-        console.error("Download failed", e);
-        alert("Could not download the file. Please check permissions and try again.");
-    }
-    onClose();
-  };
+const ClipboardIcon: React.FC<{ className?: string }> = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>);
+const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>);
 
-  return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={onClose}>
-      <div className="bg-brand-gray rounded-lg shadow-xl p-8 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-        <h2 className="text-2xl font-bold mb-2">Unsupported File Format</h2>
-        <p className="text-gray-400 mb-4">
-          This file format is not supported by your browser. You can download the file and view it with a desktop application.
-        </p>
-        <div className="bg-brand-black p-3 rounded-md mb-6">
-          <p className="text-sm text-gray-400">File:</p>
-          <code className="text-white break-all font-mono">{media.fullPath}</code>
+const UnsupportedMediaModal: React.FC<{ media: VideoFile; onClose: () => void; }> = ({ media, onClose }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopyPath = () => {
+        if (isCopied) return;
+        navigator.clipboard.writeText(media.fullPath).then(() => {
+            setIsCopied(true);
+            const timer = setTimeout(() => setIsCopied(false), 2500);
+            return () => clearTimeout(timer);
+        }).catch(err => {
+            console.error('Failed to copy path: ', err);
+            alert('Could not copy path to clipboard.');
+        });
+    };
+
+    const reasonCode = media.unsupportedReason?.code;
+    let reasonMessage = "This video's format or internal codec is not supported by your browser.";
+    if (reasonCode === 3 || reasonCode === 4) { // MEDIA_ERR_DECODE or MEDIA_ERR_SRC_NOT_SUPPORTED
+        reasonMessage = "Your browser cannot play this video because it uses an unsupported codec (e.g., H.265/HEVC). This is a common browser limitation.";
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={onClose}>
+            <div className="bg-brand-gray rounded-lg shadow-xl p-8 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-bold mb-2">Unsupported Video</h2>
+                <p className="text-gray-400 mb-4">{reasonMessage}</p>
+                <p className="text-gray-400 mb-6">
+                    To watch it, we recommend opening the file with a desktop player like <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener noreferrer" className="text-brand-red hover:underline">VLC Media Player</a>, which supports a much wider range of video formats.
+                </p>
+                
+                <div 
+                  onClick={handleCopyPath}
+                  className="bg-brand-black p-3 rounded-md mb-6 relative group cursor-pointer border border-transparent hover:border-brand-red transition-colors"
+                >
+                    <p className="text-sm text-gray-400 mb-1">File path (click to copy):</p>
+                    <div className="flex justify-between items-center">
+                        <code className="text-white break-all font-mono pr-4">{media.fullPath}</code>
+                        <div className="text-gray-400 group-hover:text-white transition-colors">
+                             {isCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5" />}
+                        </div>
+                    </div>
+                    <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 bg-brand-red text-white text-xs px-2 py-0.5 rounded-full transition-all duration-300 ${isCopied ? 'opacity-100 translate-y-full' : 'opacity-0'}`}>Copied!</div>
+                </div>
+
+                {media.unsupportedReason?.message && (
+                    <div className="bg-brand-black p-3 rounded-md mb-6">
+                        <p className="text-sm text-gray-400">Browser Error:</p>
+                        <code className="text-gray-500 break-all text-xs font-mono">{media.unsupportedReason.message}</code>
+                    </div>
+                )}
+
+                <div className="flex justify-end mt-8">
+                    <button onClick={onClose} className="py-2 px-6 rounded-md bg-brand-red text-white font-bold hover:bg-red-700 transition-colors">Close</button>
+                </div>
+            </div>
         </div>
-        <div className="flex justify-end space-x-4">
-          <button onClick={onClose} className="py-2 px-6 rounded-md bg-brand-light-gray hover:bg-gray-600 transition-colors">Close</button>
-          <button onClick={handleDownload} className="py-2 px-6 rounded-md bg-brand-red text-white font-bold hover:bg-red-700 transition-colors">Download File</button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 

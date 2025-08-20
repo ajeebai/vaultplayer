@@ -23,6 +23,10 @@ export interface VideoFile extends MediaFile {
   lastWatched?: Date;
   subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle }[];
   isPlayable?: boolean;
+  unsupportedReason?: {
+    code?: number;
+    message?: string;
+  };
 }
 
 // Internal types for DB stores
@@ -38,6 +42,10 @@ interface LibraryVideo {
   lastWatched?: Date;
   subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle }[];
   isPlayable?: boolean;
+  unsupportedReason?: {
+    code?: number;
+    message?: string;
+  };
   mediaKey: string;
 }
 

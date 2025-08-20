@@ -125,11 +125,12 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
                 metadata: { duration: number; width: number; height: number } | null;
                 poster: Blob | null;
                 isError?: boolean;
+                errorDetails?: { code?: number; message?: string };
             }>((resolve) => {
                 const objectUrl = URL.createObjectURL(file);
                 video.src = objectUrl;
                 const cleanup = () => { URL.revokeObjectURL(objectUrl); video.removeAttribute('src'); video.load(); };
-                const timeoutId = setTimeout(() => { cleanup(); resolve({ metadata: null, poster: null, isError: true }); }, 10000);
+                const timeoutId = setTimeout(() => { cleanup(); resolve({ metadata: null, poster: null, isError: true, errorDetails: { message: 'Processing timed out after 10 seconds.' } }); }, 10000);
                 let metadataResult: { duration: number; width: number; height: number } | null = null;
                 video.onloadedmetadata = () => { metadataResult = { duration: video.duration, width: video.videoWidth, height: video.videoHeight }; };
                 video.onseeked = () => {
@@ -142,10 +143,23 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
                     if (!isFinite(video.duration) || video.duration <= 0) { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null }); return; }
                     video.currentTime = isFinite(video.duration * 0.1) ? video.duration * 0.1 : 0;
                 };
-                video.onerror = () => { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null, isError: true }); };
+                video.onerror = () => {
+                    const errorDetails = { code: video.error?.code, message: video.error?.message };
+                    clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null, isError: true, errorDetails }); 
+                };
             });
 
-            return { ...videoFile, poster: result.poster ?? undefined, duration: result.metadata?.duration, width: result.metadata?.width, height: result.metadata?.height, size: file.size, lastModified: file.lastModified, isPlayable: !result.isError };
+            return { 
+                ...videoFile, 
+                poster: result.poster ?? undefined, 
+                duration: result.metadata?.duration, 
+                width: result.metadata?.width, 
+                height: result.metadata?.height, 
+                size: file.size, 
+                lastModified: file.lastModified, 
+                isPlayable: !result.isError,
+                unsupportedReason: result.errorDetails,
+             };
         } finally {
             video.remove();
             canvas.remove();
