@@ -1,4 +1,6 @@
-<img width="1492" height="1054" alt="image" src="https://github.com/user-attachments/assets/2c5a7818-10b1-4480-8435-888eaac76d5b" /><img width="1492" height="1054" alt="image" src="https://github.com/user-attachments/assets/85e37158-0c5e-41bf-be44-700a0483a93a" /># Vault ✨
+<img width="1492" height="1054" alt="image" src="https://github.com/user-attachments/assets/2c5a7818-10b1-4480-8435-888eaac76d5b" />
+
+Vault ✨
 
 > Your media, your rules. No server required.
 
@@ -74,8 +76,8 @@ And that's it! Your personal streaming vault is now running. Open your browser a
 
 If Vault has saved you from boredom or just made your movie collection look amazing, consider showing some love! Your support helps keep the project alive, ad-free, and constantly improving.
 
-<a href="https://gumroad.com/l/your-product" target="_blank">
-  <img src="https://img.shields.io/badge/Support%20on-Gumroad-ff69b4?style=for-the-badge&logo=gumroad" alt="Support on Gumroad">
+<a href="https://www.buymeacoffee.com/notajeeb" target="_blank">
+  <img src="https://img.shields.io/badge/Buy%20Me%20A-Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me A Coffee">
 </a>
 
 P.S. this is my first project that I'll keep improving :).
