@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { VideoFile } from '../services/db';
 import { formatDuration } from '../utils/formatters';
@@ -7,7 +6,7 @@ import { getFileWithPermission } from '../utils/fileSystem';
 const PlusIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>);
 const CheckIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>);
 const TagIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 20 20" fill="currentColor"><path d="M18.25 2.25H9.5a.75.75 0 000 1.5h8.75a.75.75 0 000-1.5zM18.25 8.75H9.5a.75.75 0 000 1.5h8.75a.75.75 0 000-1.5zM18.25 15.25H9.5a.75.75 0 000 1.5h8.75a.75.75 0 000-1.5z"></path><path fillRule="evenodd" d="M3.53 2.47a.75.75 0 00-1.06 0L1.22 3.72a.75.75 0 000 1.06l4 4a.75.75 0 001.06 0l1.25-1.25V2.47L3.53 2.47zm3.22 5.28L2.78 3.78l-.22.22v4.44l4.44-.22 1.25-1.25-4-4z" clipRule="evenodd"></path></svg>);
-const UnsupportedIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M21.25 2.75H2.75a1 1 0 00-1 1v16.5a1 1 0 001 1h18.5a1 1 0 001-1V3.75a1 1 0 00-1-1zM19.75 19.25H4.25V4.75h15.5v14.5z"/><path d="M7.75 6.75h2.5v2.5h-2.5zm5 0h2.5v2.5h-2.5zm-5 5h2.5v2.5h-2.5zm5 0h2.5v2.5h-2.5z"/><path fillRule="evenodd" d="M4.22 2.72a.75.75 0 011.06 0L21.22 18.66a.75.75 0 11-1.06 1.06L2.72 4.28a.75.75 0 010-1.06z"/></svg>);
+const UnsupportedIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M21.25 2.75H2.75a1 1 0 00-1 1v16.5a1 1 0 001 1h18.5a1 1 0 001-1V3.75a1 1 0 00-1-1zM19.75 19.25H4.25V4.75h15.5v14.5z"/><path d="M7.75 6.75h2.5v2.5h-2.5zm5 0h2.5v2.5h-2.5zm-5 5h2.5v2.5h-2.5zm5 0h2.5v2.5h-2.5z"/><path fillRule="evenodd" d="M4.22 2.72a.75.75 0 011.06 0L21.22 18.66a.75.75 0 11-1.06 1.06L2.72 4.28a.75.75 0 010-1.06z" clipRule="evenodd"/></svg>);
 
 interface VideoTileProps {
   video: VideoFile;
