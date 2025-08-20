@@ -31,15 +31,6 @@ interface LibraryProps {
   onClearContinueWatching?: () => void;
 }
 
-const shuffle = <T,>(array: T[]): T[] => {
-  const newArr = [...array];
-  for (let i = newArr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
-  }
-  return newArr;
-};
-
 const chunkArray = <T,>(array: T[], numChunks: number): T[][] => {
     if (numChunks <= 1) return [array];
     const result: T[][] = [];
@@ -107,10 +98,10 @@ export const Library: React.FC<LibraryProps> = ({
     return displayedMedia.length > 0 ? displayedMedia[Math.floor(Math.random() * displayedMedia.length)] : null;
   }, [displayedMedia, selectedCategoryPath, selectedTag]);
 
-  const getShuffledMediaForNode = (node: CategoryNode): VideoFile[] => {
+  const getMediaForNode = (node: CategoryNode): VideoFile[] => {
     const allNodeMedia = getAllMediaFromNode(node);
-    const filteredNodeMedia = showHidden ? allNodeMedia : allNodeMedia.filter(v => !v.isHidden);
-    return shuffle(filteredNodeMedia);
+    // The order is preserved from the main media array, which is stable.
+    return showHidden ? allNodeMedia : allNodeMedia.filter(v => !v.isHidden);
   };
 
   // Show full-screen loader only on initial scan before any media are listed
@@ -129,7 +120,7 @@ export const Library: React.FC<LibraryProps> = ({
 
   const renderRailsForNodes = (nodes: CategoryNode[]) => {
     return nodes.flatMap((node) => {
-      const mediaForNode = getShuffledMediaForNode(node);
+      const mediaForNode = getMediaForNode(node);
       if (mediaForNode.length === 0) return [];
 
       const CHUNK_THRESHOLD = 7;

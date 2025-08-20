@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { VideoFile } from '../services/db';
 import { formatDuration } from '../utils/formatters';
@@ -23,19 +22,23 @@ interface VideoTileProps {
 
 export const VideoTile: React.FC<VideoTileProps> = ({ video, onSelectVideo, onToggleFavorite, onToggleHidden, onUpdateTags, onUnsupportedMedia, onPrioritizeMedia, isGrid = false }) => {
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [isEditingTags, setIsEditingTags] = useState(false);
   const [tagInput, setTagInput] = useState(video.tags?.join(', ') || '');
   
   const tileRef = useRef<HTMLDivElement>(null);
   const tagInputRef = useRef<HTMLInputElement>(null);
-  const isPlayable = video.isPlayable !== false; // Default to true if undefined
+  const isPlayable = video.isPlayable !== false;
 
   useEffect(() => {
     let url: string | null = null;
+    // When the video prop changes, reset the loaded state
+    setIsImageLoaded(false);
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          if (video.poster && !posterUrl) {
+          if (video.poster) {
             url = URL.createObjectURL(video.poster);
             setPosterUrl(url);
           }
@@ -58,7 +61,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onSelectVideo, onTo
       if (url) URL.revokeObjectURL(url);
       if (tileRef.current) observer.unobserve(tileRef.current);
     };
-  }, [video, onPrioritizeMedia, posterUrl, setPosterUrl]);
+  }, [video, onPrioritizeMedia]);
   
   const progressPercent = video.duration && video.playbackPosition ? (video.playbackPosition / video.duration) * 100 : 0;
 
@@ -107,19 +110,30 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onSelectVideo, onTo
       className={tileClassName}
       onClick={handleTileClick}
     >
-      <div className="absolute inset-0 transition-opacity duration-500">
-        {posterUrl && isPlayable ? (
-          <img src={posterUrl} alt={video.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" />
-        ) : isPlayable && !posterUrl ? (
-          <div className="w-full h-full bg-brand-light-gray animate-pulse" />
-        ) : ( // Not playable
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 p-2 text-center text-sm break-words bg-brand-gray">
+      <div className="absolute inset-0 bg-brand-gray">
+        {/* Skeleton loader is always visible until the image is loaded and faded in */}
+        {isPlayable && (
+          <div className={`w-full h-full bg-brand-light-gray transition-opacity duration-500 ${isImageLoaded ? 'opacity-0' : 'animate-pulse opacity-100'}`} />
+        )}
+        
+        {posterUrl && isPlayable && (
+          <img 
+            src={posterUrl} 
+            alt={video.name} 
+            className={`w-full h-full object-cover absolute inset-0 transition-opacity duration-500 group-hover:scale-110 ${isImageLoaded ? 'opacity-100' : 'opacity-0'}`}
+            onLoad={() => setIsImageLoaded(true)}
+          />
+        )}
+        
+        {!isPlayable && (
+          <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center text-gray-300 p-2 text-center text-sm break-words">
               <UnsupportedIcon className="w-8 h-8 mb-2 text-gray-400" />
               <span className="break-all">{video.name.replace(/\.[^/.]+$/, "")}</span>
               <span className="text-xs text-gray-500 mt-1">Unsupported Format</span>
           </div>
         )}
       </div>
+
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
       
       {/* --- On-hover controls --- */}
