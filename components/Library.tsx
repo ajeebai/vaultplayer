@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Hero } from './Hero';
 import { Rail } from './Rail';
@@ -16,6 +17,7 @@ interface LibraryProps {
   progressMessage: string;
   searchQuery: string;
   onToggleFavorite: (fullPath: string) => void;
+  onToggleHidden: (fullPath: string) => void;
   onUpdateTags: (fullPath: string, tags: string[]) => void;
   selectedCategoryPath: string | null;
   onSelectCategory: (path: string | null) => void;
@@ -25,7 +27,7 @@ interface LibraryProps {
   hasLibraries: boolean;
   isFavoritesView: boolean;
   onPrioritizeMedia: (media: VideoFile) => void;
-  showUnsupported: boolean;
+  showHidden: boolean;
   onClearContinueWatching?: () => void;
 }
 
@@ -64,6 +66,7 @@ export const Library: React.FC<LibraryProps> = ({
   searchQuery,
   isFavoritesView,
   onToggleFavorite,
+  onToggleHidden,
   onUpdateTags,
   selectedCategoryPath,
   onSelectCategory,
@@ -72,13 +75,13 @@ export const Library: React.FC<LibraryProps> = ({
   onGoHome,
   hasLibraries,
   onPrioritizeMedia,
-  showUnsupported,
+  showHidden,
   onClearContinueWatching,
 }) => {
 
   const displayedMedia = useMemo(() => {
-    return showUnsupported ? media : media.filter(v => v.isPlayable !== false);
-  }, [media, showUnsupported]);
+    return showHidden ? media : media.filter(v => !v.isHidden);
+  }, [media, showHidden]);
 
   const searchFilteredMedia = useMemo(() => {
     if (!searchQuery) return displayedMedia;
@@ -106,7 +109,7 @@ export const Library: React.FC<LibraryProps> = ({
 
   const getShuffledMediaForNode = (node: CategoryNode): VideoFile[] => {
     const allNodeMedia = getAllMediaFromNode(node);
-    const filteredNodeMedia = showUnsupported ? allNodeMedia : allNodeMedia.filter(v => v.isPlayable !== false);
+    const filteredNodeMedia = showHidden ? allNodeMedia : allNodeMedia.filter(v => !v.isHidden);
     return shuffle(filteredNodeMedia);
   };
 
@@ -138,6 +141,7 @@ export const Library: React.FC<LibraryProps> = ({
           videos={mediaForNode}
           onSelectVideo={onSelectVideo}
           onToggleFavorite={onToggleFavorite}
+          onToggleHidden={onToggleHidden}
           onUpdateTags={onUpdateTags}
           onSelectCategory={onSelectCategory}
           onUnsupportedMedia={onUnsupportedMedia}
@@ -158,6 +162,7 @@ export const Library: React.FC<LibraryProps> = ({
                   videos={chunk}
                   onSelectVideo={onSelectVideo}
                   onToggleFavorite={onToggleFavorite}
+                  onToggleHidden={onToggleHidden}
                   onUpdateTags={onUpdateTags}
                   onSelectCategory={onSelectCategory}
                   onUnsupportedMedia={onUnsupportedMedia}
@@ -183,6 +188,7 @@ export const Library: React.FC<LibraryProps> = ({
             videos={continueWatching}
             onSelectVideo={onSelectVideo}
             onToggleFavorite={onToggleFavorite}
+            onToggleHidden={onToggleHidden}
             onUpdateTags={onUpdateTags}
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
@@ -196,6 +202,7 @@ export const Library: React.FC<LibraryProps> = ({
             videos={favorites}
             onSelectVideo={onSelectVideo}
             onToggleFavorite={onToggleFavorite}
+            onToggleHidden={onToggleHidden}
             onUpdateTags={onUpdateTags}
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
@@ -209,18 +216,18 @@ export const Library: React.FC<LibraryProps> = ({
   
   const renderContent = () => {
     if (searchQuery) {
-      return <VideoGrid media={searchFilteredMedia} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
+      return <VideoGrid media={searchFilteredMedia} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onToggleHidden={onToggleHidden} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
     }
     if (isFavoritesView) {
-      return <VideoGrid media={displayedMedia.filter(v => v.isFavorite)} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
+      return <VideoGrid media={displayedMedia.filter(v => v.isFavorite)} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onToggleHidden={onToggleHidden} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
     }
     if (selectedTag) {
-      return <VideoGrid media={displayedMedia.filter(v => v.tags?.includes(selectedTag))} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
+      return <VideoGrid media={displayedMedia.filter(v => v.tags?.includes(selectedTag))} onSelectVideo={onSelectVideo} onToggleFavorite={onToggleFavorite} onToggleHidden={onToggleHidden} onUpdateTags={onUpdateTags} onUnsupportedMedia={onUnsupportedMedia} onPrioritizeMedia={onPrioritizeMedia} />;
     }
     if (currentCategoryNode) {
-      const filesInFolder = showUnsupported 
-        ? currentCategoryNode.media
-        : currentCategoryNode.media.filter(v => v.isPlayable !== false);
+      const filesInFolder = showHidden
+        ? currentCategoryNode.media 
+        : currentCategoryNode.media.filter(v => !v.isHidden);
 
       return (
         <>
@@ -232,6 +239,7 @@ export const Library: React.FC<LibraryProps> = ({
                 videos={filesInFolder}
                 onSelectVideo={onSelectVideo}
                 onToggleFavorite={onToggleFavorite}
+                onToggleHidden={onToggleHidden}
                 onUpdateTags={onUpdateTags}
                 onSelectCategory={onSelectCategory}
                 onUnsupportedMedia={onUnsupportedMedia}
@@ -257,17 +265,6 @@ export const Library: React.FC<LibraryProps> = ({
 
   return (
     <div>
-      {/* Sticky Progress Bar for background processing */}
-      {isLoading && media.length > 0 && (
-          <div className="sticky top-[77px] z-30 -mt-[77px] pt-[77px] bg-brand-black/80 backdrop-blur-sm">
-              <div className="w-full p-2 text-center">
-                  <p className="text-sm mb-1">{progressMessage}</p>
-                  <div className="w-full max-w-lg mx-auto bg-brand-light-gray rounded-full h-1.5">
-                      <div className="bg-brand-red h-1.5 rounded-full" style={{ width: `${progress}%` }}></div>
-                  </div>
-              </div>
-          </div>
-      )}
       <div className={`p-4 md:p-8 ${heroMedia || selectedCategoryPath ? '' : 'pt-8'}`}>
         {renderContent()}
       </div>

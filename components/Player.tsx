@@ -5,7 +5,6 @@ import { formatDuration } from '../utils/formatters';
 import { srtToVtt } from '../utils/srt2vtt';
 import { getFileWithPermission } from '../utils/fileSystem';
 import { LibraryInfo } from '../types';
-import { getDominantColor } from '../utils/color';
 
 // New, consistent, and intuitive line icon set
 const PlayIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" /></svg>);
@@ -16,7 +15,11 @@ const Replay10Icon: React.FC<{className?: string}> = ({className}) => (<svg xmln
 const Forward10Icon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M23 4v6h-6"/><path strokeLinecap="round" strokeLinejoin="round" d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>);
 const FullscreenIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m4.5 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" /></svg>);
 const FullscreenExitIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" /></svg>);
-const SubtitlesIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M21 4H3C1.9 4 1 4.9 1 6V18C1 19.1 1.9 20 3 20H21C22.1 20 23 19.1 23 18V6C23 4.9 22.1 4 21 4ZM8 15H5.5V13.5H8V15ZM13.5 15H11V13.5H13.5V15ZM19 15H16.5V13.5H19V15ZM19 10.5H5V8H19V10.5Z" /></svg>);
+const CCIcon: React.FC<{className?: string}> = ({className}) => (
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM11 11H9.5v-0.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-0.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/>
+    </svg>
+);
 const CloseIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>);
 const SkipPreviousIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 19.5V4.5" /></svg>);
 const SkipNextIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 4.5v15" /></svg>);
@@ -24,8 +27,6 @@ const PlaylistIcon: React.FC<{className?: string}> = ({className}) => (<svg xmln
 const VideoPlaceholderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.66-1.34-3-3-3s-3 1.34-3 3v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V6h1v4.5c0 1.38-1.12 2.5-2.5 2.5S10 11.88 10 10.5V7c0-2.21 1.79-4 4-4s4 1.79 4 4v3.5c0 1.93-1.57 3.5-3.5 3.5S11 15.43 11 13.5V6H9.5v7.5c0 2.76 2.24 5 5 5s5-2.24 5-5V7h-1.5v3.5z"/></svg>);
 const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>);
 const ReturnIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7h-2z"></path></svg>);
-const SparklesIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.55 3.55 3.55 1.55-3.55 1.55L12 12.7l-1.55-3.55-3.55-1.55 3.55-1.55L12 2.5zm0 8.5l-1.55 3.55-3.55 1.55 3.55 1.55L12 21.2l1.55-3.55 3.55-1.55-3.55-1.55L12 11zm8.5-4.5l-.94 2.14-2.14.94 2.14.94.94 2.14.94-2.14 2.14-.94-2.14-.94-.94-2.14z"/></svg>);
-const CheckIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>);
 
 
 interface PlayerProps {
@@ -131,28 +132,17 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSubtitleMenuOpen, setIsSubtitleMenuOpen] = useState(false);
-  const [isEffectsMenuOpen, setIsEffectsMenuOpen] = useState(false);
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
   const [activeTrackLabel, setActiveTrackLabel] = useState<string | null>(null);
   const [playlistPath, setPlaylistPath] = useState(initialVideo.parentPath);
-
   const [isVisible, setIsVisible] = useState(false);
-  const [ambilightUrl, setAmbilightUrl] = useState<string | null>(null);
-  const [dominantColor, setDominantColor] = useState<string | null>(null);
-  const [effects, setEffects] = useState({
-    letterbox: false,
-    filmGrain: false,
-    vintage: false,
-  });
-  const [preloadedUrl, setPreloadedUrl] = useState<string | null>(null);
-  const [showTitleCard, setShowTitleCard] = useState(true);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
   const clickTimeoutRef = useRef<number | null>(null);
   const subtitleMenuRef = useRef<HTMLDivElement>(null);
-  const effectsMenuRef = useRef<HTMLDivElement>(null);
+  const subtitleInputRef = useRef<HTMLInputElement>(null);
   const db = useMemo(() => new MediaDB(), []);
 
   const handleClose = useCallback(() => {
@@ -163,7 +153,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     }, 400);
   }, [on_close]);
 
-  // Grand Opening Animation
+  // Player visible animation
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
@@ -171,38 +161,8 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
 
   useEffect(() => {
     setVideo(initialVideo);
+    setPlaylistPath(initialVideo.parentPath);
   }, [initialVideo]);
-
-  // Title Card Animation & Poster Effects
-  useEffect(() => {
-    setPlaylistPath(video.parentPath);
-    setShowTitleCard(true);
-    const titleTimer = setTimeout(() => setShowTitleCard(false), 5000);
-
-    let url: string | null = null;
-    const updatePosterEffects = async () => {
-        if (video.poster) {
-            url = URL.createObjectURL(video.poster);
-            setAmbilightUrl(url);
-            try {
-              const color = await getDominantColor(video.poster);
-              setDominantColor(color);
-            } catch (e) {
-              console.warn("Could not get dominant color from poster", e);
-              setDominantColor(null);
-            }
-        } else {
-            setAmbilightUrl(null);
-            setDominantColor(null);
-        }
-    };
-    updatePosterEffects();
-    
-    return () => {
-        clearTimeout(titleTimer);
-        if (url) URL.revokeObjectURL(url);
-    };
-  }, [video]);
 
   const { playlistItems, playlistTitle } = useMemo(() => {
     const videosInPath: PlaylistItemData[] = [];
@@ -253,7 +213,6 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     if (isPlaying) {
       setIsControlsVisible(false);
       setIsSubtitleMenuOpen(false);
-      setIsEffectsMenuOpen(false);
     }
   }, [isPlaying]);
 
@@ -272,30 +231,6 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
       setVideo(currentPlaylistVideos[currentIndex + 1]);
     }
   }, [hasNext, currentIndex, currentPlaylistVideos]);
-  
-  // Preloading effect
-  useEffect(() => {
-    let nextUrl: string | null = null;
-    const preloadNext = async () => {
-        if (hasNext) {
-            const nextVideo = currentPlaylistVideos[currentIndex + 1];
-            try {
-                const file = await getFileWithPermission(nextVideo.fileHandle);
-                nextUrl = URL.createObjectURL(file);
-                setPreloadedUrl(nextUrl);
-            } catch(e) {
-                console.warn("Failed to preload next video", e);
-            }
-        } else {
-            setPreloadedUrl(null);
-        }
-    };
-    preloadNext();
-    return () => {
-        if (nextUrl) URL.revokeObjectURL(nextUrl);
-    }
-  }, [currentIndex, currentPlaylistVideos, hasNext]);
-
 
   const handlePrevious = () => {
     if (hasPrevious) {
@@ -303,14 +238,24 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     }
   };
 
+  // Effect to manage the lifecycle of subtitle object URLs to prevent memory leaks.
+  useEffect(() => {
+    // Create a snapshot of the current URLs.
+    const currentSubtitleUrls = subtitles.map(s => s.src);
+    // When the component unmounts or this effect re-runs, clean up the URLs from the *previous* render.
+    return () => {
+      currentSubtitleUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [subtitles]);
+
   useEffect(() => {
     let isMounted = true;
     let objectUrl: string | null = null;
-    let subtitleUrls: string[] = [];
   
     const loadVideo = async () => {
       setError(null);
       setVideoSrc(null);
+      // This will trigger the cleanup effect above, revoking old subtitle URLs.
       setSubtitles([]);
       setProgress(0);
       setDuration(0);
@@ -334,13 +279,13 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
             }
             const subBlob = new Blob([subContent], { type: 'text/vtt' });
             const subUrl = URL.createObjectURL(subBlob);
-            subtitleUrls.push(subUrl);
             subTracks.push({ src: subUrl, lang: sub.lang, label: sub.name });
           } catch (subErr) {
             console.warn(`Could not load subtitle ${sub.name}:`, subErr);
           }
         }
         if (isMounted) {
+          // Setting the new state; the cleanup effect will now be responsible for these URLs.
           setSubtitles(subTracks);
         }
       } catch (err: any) {
@@ -356,7 +301,6 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     return () => {
       isMounted = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
-      subtitleUrls.forEach(url => URL.revokeObjectURL(url));
     };
   }, [video]);
 
@@ -367,9 +311,6 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     const handleClickOutside = (event: MouseEvent) => {
       if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target as Node)) {
         setIsSubtitleMenuOpen(false);
-      }
-      if (effectsMenuRef.current && !effectsMenuRef.current.contains(event.target as Node)) {
-        setIsEffectsMenuOpen(false);
       }
     };
 
@@ -480,14 +421,40 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     setActiveTrackLabel(trackLabel);
     setIsSubtitleMenuOpen(false);
   };
-  
-  const handleToggleEffect = (effect: keyof typeof effects) => {
-    setEffects(prev => ({ ...prev, [effect]: !prev[effect] }));
+
+  const handleLoadSubtitleClick = () => {
+    subtitleInputRef.current?.click();
+  };
+
+  const handleSubtitleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset input value to allow loading the same file again if needed
+    event.target.value = '';
+
+    try {
+        let subContent = await file.text();
+        if (file.name.toLowerCase().endsWith('.srt')) {
+            subContent = srtToVtt(subContent);
+        }
+        const subBlob = new Blob([subContent], { type: 'text/vtt' });
+        const subUrl = URL.createObjectURL(subBlob);
+
+        const newTrack = { src: subUrl, lang: 'xx', label: `Loaded: ${file.name}` };
+        
+        setSubtitles(prev => [...prev, newTrack]);
+        // Defer selection to allow React to render the new track element
+        setTimeout(() => handleSelectSubtitle(newTrack.label), 100);
+
+    } catch (err) {
+        console.error("Error loading subtitle file:", err);
+        alert("Could not load or parse the subtitle file.");
+    }
   };
 
   const progressPercentage = duration > 0 ? (progress / duration) * 100 : 0;
   const volumePercentage = isMuted ? 0 : volume * 100;
-  const isAnyEffectActive = Object.values(effects).some(v => v);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -554,12 +521,9 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
 
   return (
     <>
-      <div className="player-ambilight-bg" style={{ backgroundImage: `url(${ambilightUrl})`, opacity: isVisible ? 1 : 0 }} />
-      {preloadedUrl && <video src={preloadedUrl} preload="metadata" className="hidden" />}
       <div 
           ref={playerContainerRef} 
           className={`fixed inset-0 bg-black z-50 flex items-center justify-center player-container ${isVisible ? 'is-visible' : ''}`}
-          style={{ '--player-accent-color': dominantColor } as React.CSSProperties}
           onMouseMove={showControls}
           onMouseEnter={showControls}
           onMouseLeave={hideControls}
@@ -568,7 +532,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
         <video
           ref={videoRef}
           src={videoSrc || ''}
-          className={`w-full h-full object-contain ${effects.vintage ? 'video-effect-vintage' : ''}`}
+          className="w-full h-full object-contain"
           autoPlay
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
@@ -581,15 +545,6 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
           ))}
         </video>
         
-        {effects.letterbox && (
-          <>
-            <div className="letterbox-overlay top-0"></div>
-            <div className="letterbox-overlay bottom-0"></div>
-          </>
-        )}
-        {effects.filmGrain && <div className="film-grain-overlay"></div>}
-        {effects.vintage && <div className="vignette-overlay"></div>}
-
         <div className={`absolute inset-0 player-controls ${!isControlsVisible ? 'player-controls-hidden' : ''}`}>
           {/* Top Controls */}
           <div 
@@ -598,9 +553,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
             onClick={e => e.stopPropagation()}
           >
               <div className="flex-1 min-w-0">
-                {showTitleCard && (
-                  <h2 className="text-white text-2xl font-bold truncate player-title-card">{video.name.replace(/\.[^/.]+$/, "")}</h2>
-                )}
+                <h2 className="text-white text-2xl font-bold truncate">{video.name.replace(/\.[^/.]+$/, "")}</h2>
               </div>
               <button onClick={handleClose} className="text-white flex-shrink-0 player-themed-button">
                   <CloseIcon className="w-8 h-8"/>
@@ -663,40 +616,9 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                   </div>
                   <div className="flex items-center space-x-2 sm:space-x-4">
                       <div className="relative">
-                          <button onClick={() => setIsEffectsMenuOpen(o => !o)} className={`player-themed-button ${isAnyEffectActive ? 'player-active-button' : ''}`} title="Visual Effects">
-                              <SparklesIcon className="w-7 h-7"/>
+                          <button onClick={() => setIsSubtitleMenuOpen(o => !o)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`} title="Subtitles / CC">
+                              <CCIcon className="w-7 h-7"/>
                           </button>
-                          {isEffectsMenuOpen && (
-                              <div ref={effectsMenuRef} className="absolute bottom-full right-0 mb-2 bg-black/80 backdrop-blur-sm rounded-md py-1 w-48 text-white">
-                                <ul>
-                                    <li>
-                                        <button onClick={() => handleToggleEffect('letterbox')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
-                                            Letterbox
-                                            {effects.letterbox && <CheckIcon className="w-5 h-5 player-active-button" />}
-                                        </button>
-                                    </li>
-                                    <li>
-                                        <button onClick={() => handleToggleEffect('filmGrain')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
-                                            Film Grain
-                                            {effects.filmGrain && <CheckIcon className="w-5 h-5 player-active-button" />}
-                                        </button>
-                                    </li>
-                                     <li>
-                                        <button onClick={() => handleToggleEffect('vintage')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
-                                            8mm Vintage
-                                            {effects.vintage && <CheckIcon className="w-5 h-5 player-active-button" />}
-                                        </button>
-                                    </li>
-                                </ul>
-                              </div>
-                          )}
-                      </div>
-                      <div className="relative">
-                          {subtitles.length > 0 && 
-                              <button onClick={() => setIsSubtitleMenuOpen(o => !o)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`}>
-                                  <SubtitlesIcon className="w-7 h-7"/>
-                              </button>
-                          }
                           {isSubtitleMenuOpen && (
                               <div ref={subtitleMenuRef} className="absolute bottom-full right-0 mb-2 bg-black/80 backdrop-blur-sm rounded-md py-1 w-48 text-white">
                                   <ul>
@@ -718,6 +640,12 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                                               </button>
                                           </li>
                                       ))}
+                                      <div className="border-t border-brand-gray/50 my-1"></div>
+                                      <li>
+                                        <button onClick={handleLoadSubtitleClick} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50">
+                                            Load from file...
+                                        </button>
+                                      </li>
                                   </ul>
                               </div>
                           )}
@@ -760,6 +688,8 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
             </div>
         </section>
         
+        <input type="file" ref={subtitleInputRef} onChange={handleSubtitleFileChange} accept=".vtt,.srt" className="hidden" />
+
         <style>{`
           .range-thumb::-webkit-slider-thumb {
               -webkit-appearance: none;

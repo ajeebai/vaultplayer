@@ -7,12 +7,13 @@ interface VideoGridProps {
   media: VideoFile[];
   onSelectVideo: (video: VideoFile) => void;
   onToggleFavorite: (fullPath: string) => void;
+  onToggleHidden: (fullPath: string) => void;
   onUpdateTags: (fullPath: string, tags: string[]) => void;
   onUnsupportedMedia: (media: VideoFile) => void;
   onPrioritizeMedia: (media: VideoFile) => void;
 }
 
-export const VideoGrid: React.FC<VideoGridProps> = ({ media, onSelectVideo, onToggleFavorite, onUpdateTags, onUnsupportedMedia, onPrioritizeMedia }) => {
+export const VideoGrid: React.FC<VideoGridProps> = ({ media, onSelectVideo, onToggleFavorite, onToggleHidden, onUpdateTags, onUnsupportedMedia, onPrioritizeMedia }) => {
   if (media.length === 0) {
     return <div className="text-center text-gray-400">No media to display in this view.</div>;
   }
@@ -25,6 +26,7 @@ export const VideoGrid: React.FC<VideoGridProps> = ({ media, onSelectVideo, onTo
             video={videoFile} 
             onSelectVideo={onSelectVideo} 
             onToggleFavorite={onToggleFavorite}
+            onToggleHidden={onToggleHidden}
             onUpdateTags={onUpdateTags}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}

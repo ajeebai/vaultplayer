@@ -16,8 +16,11 @@ interface HeaderProps {
   onManageLibraries: () => void;
   isPickerSupported: boolean;
   onToggleTheme: () => void;
-  showUnsupported: boolean;
-  onToggleUnsupported: () => void;
+  isLoading: boolean;
+  progress: number;
+  progressMessage: string;
+  showHidden: boolean;
+  onToggleHidden: () => void;
 }
 
 const SearchIcon: React.FC<{className?: string; onClick?: () => void;}> = ({className, onClick}) => (<svg onClick={onClick} className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>);
@@ -67,8 +70,11 @@ export const Header: React.FC<HeaderProps> = ({
   onManageLibraries,
   isPickerSupported,
   onToggleTheme,
-  showUnsupported,
-  onToggleUnsupported,
+  isLoading,
+  progress,
+  progressMessage,
+  showHidden,
+  onToggleHidden,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -197,8 +203,8 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
         
         <div className="flex items-center space-x-2 sm:space-x-4">
-            <button onClick={onToggleUnsupported} className="text-gray-300 hover:text-white transition-colors" title={showUnsupported ? "Hide unsupported files" : "Show unsupported files"}>
-                {showUnsupported ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
+            <button onClick={onToggleHidden} className="text-gray-300 hover:text-white transition-colors" title={showHidden ? "Hide hidden files" : "Show hidden files"}>
+                {showHidden ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
             </button>
             <div className="flex items-center">
                 {isSearchActive ? (
@@ -221,6 +227,11 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
         </div>
       </div>
+      {isLoading && (
+        <div className="w-full h-0.5" title={`${progressMessage} (${Math.round(progress)}%)`}>
+            <div className="bg-brand-red h-full" style={{ width: `${progress}%`, transition: 'width 200ms ease-out' }}></div>
+        </div>
+      )}
     </header>
   );
 };
