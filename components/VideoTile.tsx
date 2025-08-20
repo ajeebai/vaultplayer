@@ -58,8 +58,7 @@ export const VideoTile: React.FC<VideoTileProps> = ({ video, onSelectVideo, onTo
       if (url) URL.revokeObjectURL(url);
       if (tileRef.current) observer.unobserve(tileRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [video.poster, video.isPlayable]);
+  }, [video, onPrioritizeMedia, posterUrl]);
   
   const progressPercent = video.duration && video.playbackPosition ? (video.playbackPosition / video.duration) * 100 : 0;
 
