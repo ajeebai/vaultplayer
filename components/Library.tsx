@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import { Hero } from './Hero';
 import { Rail } from './Rail';
@@ -30,22 +29,6 @@ interface LibraryProps {
   showHidden: boolean;
   onClearContinueWatching?: () => void;
 }
-
-const chunkArray = <T,>(array: T[], numChunks: number): T[][] => {
-    if (numChunks <= 1) return [array];
-    const result: T[][] = [];
-    const baseChunkSize = Math.floor(array.length / numChunks);
-    const remainder = array.length % numChunks;
-    let startIndex = 0;
-
-    for (let i = 0; i < numChunks; i++) {
-        const chunkSize = baseChunkSize + (i < remainder ? 1 : 0);
-        result.push(array.slice(startIndex, startIndex + chunkSize));
-        startIndex += chunkSize;
-    }
-    return result;
-};
-
 
 export const Library: React.FC<LibraryProps> = ({ 
   media, 
@@ -167,46 +150,22 @@ export const Library: React.FC<LibraryProps> = ({
         )];
       }
 
-      // Otherwise (it's a branch OR we are forcing a rail), display its content as one or more rails.
-      const CHUNK_THRESHOLD = 7;
-      if (mediaForNode.length < CHUNK_THRESHOLD) {
-        return [<Rail
-          key={node.path}
-          title={node.name}
-          categoryPath={node.path}
-          videos={mediaForNode}
-          onSelectVideo={onSelectVideo}
-          onToggleFavorite={onToggleFavorite}
-          onToggleHidden={onToggleHidden}
-          onUpdateTags={onUpdateTags}
-          onSelectCategory={onSelectCategory}
-          onUnsupportedMedia={onUnsupportedMedia}
-          onPrioritizeMedia={onPrioritizeMedia}
-        />];
-      }
+      // Otherwise (it's a branch OR we are forcing a rail), display its content as a single rail.
+      const videosToShow = mediaForNode.slice(0, 15);
       
-      const numChunks = mediaForNode.length < (CHUNK_THRESHOLD * 2) ? 2 : 3;
-      const mediaChunks = chunkArray(mediaForNode, numChunks);
-      const romanNumerals = ['I', 'II', 'III'];
-
-      return mediaChunks.map((chunk, index) => {
-          const title = numChunks > 1 ? `${node.name} ${romanNumerals[index]}` : node.name;
-          return (
-              <Rail
-                  key={`${node.path}-${index}`}
-                  title={title}
-                  categoryPath={node.path}
-                  videos={chunk}
-                  onSelectVideo={onSelectVideo}
-                  onToggleFavorite={onToggleFavorite}
-                  onToggleHidden={onToggleHidden}
-                  onUpdateTags={onUpdateTags}
-                  onSelectCategory={onSelectCategory}
-                  onUnsupportedMedia={onUnsupportedMedia}
-                  onPrioritizeMedia={onPrioritizeMedia}
-              />
-          );
-      });
+      return [<Rail
+        key={node.path}
+        title={node.name}
+        categoryPath={node.path}
+        videos={videosToShow}
+        onSelectVideo={onSelectVideo}
+        onToggleFavorite={onToggleFavorite}
+        onToggleHidden={onToggleHidden}
+        onUpdateTags={onUpdateTags}
+        onSelectCategory={onSelectCategory}
+        onUnsupportedMedia={onUnsupportedMedia}
+        onPrioritizeMedia={onPrioritizeMedia}
+      />];
     });
   }
 
