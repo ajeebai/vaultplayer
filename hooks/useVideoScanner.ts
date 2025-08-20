@@ -3,7 +3,7 @@ import { useRef, useCallback, useEffect } from 'react';
 import { MediaDB, VideoFile } from '../services/db';
 
 const workerCode = `
-  const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'ts', 'm2ts', 'mpg'];
+  const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'avi', 'ts', 'm2ts', 'mpg'];
   const SUBTITLE_EXTENSIONS = ['srt', 'vtt'];
 
   async function* getFileHandlesRecursively(directoryHandle) {
@@ -85,8 +85,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
   const libraryIdRef = useRef<string | null>(null);
   const priorityQueueRef = useRef<VideoFile[]>([]);
   const queuedPriorityPathsRef = useRef<Set<string>>(new Set());
-  const updatesAccumulatorRef = useRef<VideoFile[]>([]);
-  
+
   const prioritizeMedia = useCallback((media: VideoFile) => {
     // Only prioritize if it's unprocessed and not already in the priority queue
     if (media.isPlayable === undefined && !queuedPriorityPathsRef.current.has(media.fullPath)) {
@@ -108,8 +107,8 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
 
     onUpdate({ type: 'progress', payload: { progress: 0, message: `Processing ${totalCount} files...` } });
 
-    const MAX_CONCURRENT_PROCESSORS = Math.max(2, (navigator.hardwareConcurrency || 4) - 1);
-    const BATCH_SIZE = 50;
+    const MAX_CONCURRENT_PROCESSORS = Math.max(1, Math.floor((navigator.hardwareConcurrency || 4) / 2));
+    const updatesBatch: VideoFile[] = [];
 
     const processVideo = async (videoFile: VideoFile): Promise<VideoFile | null> => {
         const video = document.createElement('video');
@@ -162,14 +161,13 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
                 const processedMedia = await processVideo(media);
                 if (processedMedia) {
                   await db.addMedia(processedMedia);
-                  updatesAccumulatorRef.current.push(processedMedia);
+                  updatesBatch.push(processedMedia);
                 }
                 
                 processedCount++;
-                
-                if (updatesAccumulatorRef.current.length >= BATCH_SIZE) {
-                  onUpdate({ type: 'update_files', payload: [...updatesAccumulatorRef.current] });
-                  updatesAccumulatorRef.current = [];
+                if (updatesBatch.length >= 20 || ((priorityQueueRef.current.length === 0 && regularQueue.length === 0) && updatesBatch.length > 0)) {
+                    onUpdate({ type: 'update_files', payload: [...updatesBatch] });
+                    updatesBatch.length = 0;
                 }
                 onUpdate({ type: 'progress', payload: { progress: (processedCount / totalCount) * 100, message: `Processing... (${processedCount}/${totalCount})` } });
             }
@@ -177,12 +175,6 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
     };
 
     await Promise.all(Array.from({ length: MAX_CONCURRENT_PROCESSORS }, () => workerTask()));
-
-    // Flush any remaining updates
-    if (updatesAccumulatorRef.current.length > 0) {
-      onUpdate({ type: 'update_files', payload: [...updatesAccumulatorRef.current] });
-      updatesAccumulatorRef.current = [];
-    }
 
     onUpdate({ type: 'complete', payload: null });
   }, [onUpdate]);
@@ -228,8 +220,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
         });
         
         await db.addManyMedia(initialMedia);
-        // Do not add to UI until processed to avoid glitchy refreshes.
-        // The processing queue will send 'update_files' messages.
+        onUpdate({ type: 'initial_files', payload: initialMedia });
         processMediaQueue(initialMedia);
         break;
       case 'error':

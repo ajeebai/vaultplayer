@@ -10,7 +10,6 @@ interface RailProps {
   videos: VideoFile[];
   onSelectVideo: (video: VideoFile) => void;
   onToggleFavorite: (fullPath: string) => void;
-  onToggleHidden: (fullPath: string) => void;
   onUpdateTags: (fullPath: string, tags: string[]) => void;
   onSelectCategory: (category: string) => void;
   onUnsupportedMedia: (media: VideoFile) => void;
@@ -21,7 +20,7 @@ interface RailProps {
 const ClearIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>);
 
 
-export const Rail: React.FC<RailProps> = ({ title, categoryPath, videos, onSelectVideo, onToggleFavorite, onToggleHidden, onUpdateTags, onSelectCategory, onUnsupportedMedia, onPrioritizeMedia, onClear }) => {
+export const Rail: React.FC<RailProps> = ({ title, categoryPath, videos, onSelectVideo, onToggleFavorite, onUpdateTags, onSelectCategory, onUnsupportedMedia, onPrioritizeMedia, onClear }) => {
   
   const handleTitleClick = () => {
     if (categoryPath) {
@@ -52,7 +51,6 @@ export const Rail: React.FC<RailProps> = ({ title, categoryPath, videos, onSelec
             video={videoFile} 
             onSelectVideo={onSelectVideo} 
             onToggleFavorite={onToggleFavorite}
-            onToggleHidden={onToggleHidden}
             onUpdateTags={onUpdateTags}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}

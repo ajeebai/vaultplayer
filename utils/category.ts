@@ -5,9 +5,10 @@ export const buildCategoryTree = (media: VideoFile[]): CategoryNode[] => {
   const root: CategoryNode = { name: 'Home', path: '', children: [], media: [] };
   const nodeMap: Map<string, CategoryNode> = new Map([['', root]]);
 
-  // The media array's order is preserved from App state to prevent UI re-shuffling.
-  // The tree building logic is robust enough to create parent nodes on demand.
-  for (const mediaFile of media) {
+  // Sort media by path to ensure parent folders are created before children
+  const sortedMedia = [...media].sort((a, b) => a.fullPath.localeCompare(b.fullPath));
+
+  for (const mediaFile of sortedMedia) {
     const parts = mediaFile.parentPath.split('/').filter(p => p);
     let parentNode = root;
 

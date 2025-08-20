@@ -29,12 +29,11 @@ export const Hero: React.FC<HeroProps> = ({ video, onPlay }) => {
   return (
     <div className="relative h-[56.25vw] max-h-[80vh] w-full">
       {posterUrl && (
-        <img src={posterUrl} alt={video.name} className="absolute inset-0 w-full h-full object-cover" />
+        <img src={posterUrl} alt={video.name} className="absolute top-0 left-0 w-full h-full object-cover" />
       )}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent" />
-      <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-[var(--background-color)] to-transparent" />
-      <div className="absolute bottom-0 left-0 p-8 md:p-16 w-full md:w-2/3 lg:w-2/5 text-white z-10">
-        <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold drop-shadow-lg leading-tight">
+      <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-black/80 via-black/40 to-transparent"></div>
+      <div className="absolute bottom-0 left-0 p-8 md:p-16 w-full md:w-1/2 lg:w-2/5">
+        <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white drop-shadow-lg leading-tight">
           {video.name.replace(/\.[^/.]+$/, "")}
         </h2>
         <p className="text-gray-300 mt-2">{video.parentPath}</p>
