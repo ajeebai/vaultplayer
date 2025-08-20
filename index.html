@@ -150,30 +150,7 @@
         text-shadow: 0 0 10px var(--brand-red-glow);
       }
 
-      /* CINEMATIC PLAYER STYLES */
-      .theater-mode-dim {
-        position: fixed;
-        inset: 0;
-        background-color: black;
-        opacity: 0;
-        z-index: 48; /* Just below ambilight */
-        transition: opacity 0.5s ease-in-out;
-        pointer-events: none;
-      }
-      .theater-mode-dim.is-active {
-        opacity: 0.85;
-      }
-      .player-ambilight-bg {
-        position: fixed;
-        top: -10%; left: -10%;
-        width: 120%; height: 120%;
-        background-size: cover;
-        background-position: center;
-        filter: blur(50px) brightness(0.6);
-        opacity: 0;
-        transition: opacity 0.5s ease-in-out;
-        z-index: 49;
-      }
+      /* PLAYER STYLES */
       .player-container {
         opacity: 0;
         transform: scale(0.95);
@@ -184,26 +161,6 @@
         transform: scale(1);
       }
       
-      /* Grand Opening Animation */
-      @keyframes grand-opening {
-        from { opacity: 0; transform: scale(0.95); }
-        to { opacity: 1; transform: scale(1); }
-      }
-      .player-opening {
-        animation: grand-opening 0.5s ease-in-out forwards;
-      }
-
-      /* Title Card Animation */
-      @keyframes title-card-fade {
-        0% { opacity: 0; transform: translateY(10px); }
-        20% { opacity: 1; transform: translateY(0); }
-        80% { opacity: 1; transform: translateY(0); }
-        100% { opacity: 0; transform: translateY(-10px); }
-      }
-      .player-title-card {
-        animation: title-card-fade 5s ease-in-out forwards;
-      }
-
       .player-controls {
         transition: opacity 0.3s ease, transform 0.3s ease;
       }
@@ -238,44 +195,6 @@
       }
       .player-active-bg-light {
         background-color: color-mix(in srgb, var(--player-accent-color, var(--brand-red)) 80%, transparent);
-      }
-
-      /* Visual Effects */
-      .film-grain-overlay {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        pointer-events: none;
-        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAyBAMAAADsEZWCAAAAGFBMVEVvb29zc3NxcXFub29ub29tbW1wcHBub2+P3dGbAAAAB3RSTlMAAAAAAMCoAo579wAAAAlwSFlzAAAOxAAADsQBlSsOGwAAAGFJREFUOI3t0cENgDAAAMHCKQzDmH8nIq+AR1BwZ1Cgg8k7o/Lkd3XWkENIeYo93/3yB1IsAQiK5+kDAJg9o2R57z/V6S6gO8H28r9g1QhC0f8GqENo2Yo+g2gB5wAAAABJRU5ErkJggg==');
-        animation: grain 0.3s steps(1) infinite;
-        opacity: 0.1;
-      }
-      @keyframes grain {
-        0%, 100% { transform: translate(0, 0); }
-        10% { transform: translate(-1%, -1%); }
-        20% { transform: translate(1%, 1%); }
-        30% { transform: translate(-2%, 2%); }
-        40% { transform: translate(2%, -1%); }
-        50% { transform: translate(-1%, 2%); }
-        60% { transform: translate(2%, 1%); }
-        70% { transform: translate(-2%, -2%); }
-        80% { transform: translate(1%, -2%); }
-        90% { transform: translate(-1%, 1%); }
-      }
-      .letterbox-overlay {
-        position: absolute;
-        left: 0; right: 0;
-        height: 12.5%; /* Creates a ~2.35:1 aspect ratio on a 16:9 screen */
-        background-color: black;
-        pointer-events: none;
-      }
-      .vignette-overlay {
-        position: absolute;
-        top: 0; left: 0; right: 0; bottom: 0;
-        pointer-events: none;
-        box-shadow: inset 0 0 15vw rgba(0,0,0,0.4);
-      }
-      .video-effect-vintage {
-        filter: sepia(0.4) contrast(1.15) brightness(1.05) saturate(1.1);
       }
     </style>
     <script>

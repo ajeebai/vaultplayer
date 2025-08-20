@@ -1,3 +1,4 @@
+
 import { openDB, IDBPDatabase } from 'idb';
 
 export interface MediaFile {
@@ -9,6 +10,7 @@ export interface MediaFile {
   size: number;
   lastModified: number;
   isFavorite?: boolean;
+  isHidden?: boolean;
   tags?: string[];
 }
 
@@ -47,6 +49,7 @@ interface MediaMetadata {
   height?: number;
   tags?: string[];
   isFavorite?: boolean;
+  isHidden?: boolean;
 }
 
 
@@ -125,7 +128,7 @@ export class MediaDB {
     const metadataStore = tx.objectStore(METADATA_STORE_NAME);
     
     const mediaKey = generateMediaKey(media);
-    const { poster, duration, width, height, tags, isFavorite, ...libraryData } = media;
+    const { poster, duration, width, height, tags, isFavorite, isHidden, ...libraryData } = media;
 
     const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
     libraryMedia.mediaKey = mediaKey;
@@ -142,6 +145,7 @@ export class MediaDB {
         tags: tags ?? existingMetadata?.tags ?? [],
         // Preserve existing favorite status unless a new one is provided.
         isFavorite: isFavorite ?? existingMetadata?.isFavorite ?? false,
+        isHidden: isHidden ?? existingMetadata?.isHidden ?? false,
     };
     
     await metadataStore.put(newMetadata);
@@ -152,17 +156,26 @@ export class MediaDB {
 
   async addManyMedia(mediaFiles: VideoFile[]): Promise<void> {
     const db = await this.dbPromise;
-    const tx = db.transaction(VIDEO_STORE_NAME, 'readwrite');
+    const tx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
     const videoStore = tx.objectStore(VIDEO_STORE_NAME);
+    const metadataStore = tx.objectStore(METADATA_STORE_NAME);
     
     for (const media of mediaFiles) {
         const mediaKey = generateMediaKey(media);
-        const { poster, duration, width, height, tags, isFavorite, ...libraryData } = media;
+        const { poster, duration, width, height, tags, isFavorite, isHidden, ...libraryData } = media;
         
         const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
         libraryMedia.mediaKey = mediaKey;
 
         await videoStore.put(libraryMedia);
+
+        // Add a skeleton metadata object to ensure data consistency from the start.
+        // This prevents a race condition where a video exists in one store but not the other.
+        const existingMeta = await metadataStore.get(mediaKey);
+        if (!existingMeta) {
+            const skeletonMetadata: MediaMetadata = { mediaKey };
+            await metadataStore.put(skeletonMetadata);
+        }
     }
     
     await tx.done;
@@ -187,17 +200,19 @@ export class MediaDB {
 
   async getAllMedia(libraryId: string): Promise<VideoFile[]> {
     const db = await this.dbPromise;
-    const tx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readonly');
-    const videoStore = tx.objectStore(VIDEO_STORE_NAME);
-    const metadataStore = tx.objectStore(METADATA_STORE_NAME);
-
+    const videoTx = db.transaction(VIDEO_STORE_NAME, 'readonly');
+    const videoStore = videoTx.objectStore(VIDEO_STORE_NAME);
     const range = IDBKeyRange.bound([libraryId, ''], [libraryId, '\uffff']);
     const libraryMedia = await videoStore.getAll(range) as LibraryVideo[];
     
     if (libraryMedia.length === 0) return [];
 
-    const allMetadata = await metadataStore.getAll() as MediaMetadata[];
-    const metadataMap = new Map(allMetadata.map(m => [m.mediaKey, m]));
+    const uniqueMediaKeys = [...new Set(libraryMedia.map(m => m.mediaKey))];
+    const metadataTx = db.transaction(METADATA_STORE_NAME, 'readonly');
+    const metadataStore = metadataTx.objectStore(METADATA_STORE_NAME);
+    const metadataPromises = uniqueMediaKeys.map(key => metadataStore.get(key));
+    const metadataResults = (await Promise.all(metadataPromises)).filter(Boolean) as MediaMetadata[];
+    const metadataMap = new Map(metadataResults.map(m => [m.mediaKey, m]));
 
     const mediaFiles: VideoFile[] = libraryMedia.map(libMed => {
         const metadata = metadataMap.get(libMed.mediaKey) || {};
@@ -245,6 +260,29 @@ export class MediaDB {
         delete media.isFavorite;
         await videoStore.put(media);
       }
+      
+      await tx.done;
+      return {...media, ...metadata } as VideoFile;
+    }
+    
+    await tx.done;
+    return undefined;
+  }
+
+  async toggleHidden(libraryId: string, fullPath: string): Promise<VideoFile | undefined> {
+    const db = await this.dbPromise;
+    const tx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+    const videoStore = tx.objectStore(VIDEO_STORE_NAME);
+    const metadataStore = tx.objectStore(METADATA_STORE_NAME);
+
+    const media = await videoStore.get([libraryId, fullPath]) as LibraryVideo | undefined;
+    
+    if (media) {
+      const metadata = (await metadataStore.get(media.mediaKey) || { mediaKey: media.mediaKey }) as MediaMetadata;
+      
+      metadata.isHidden = !metadata.isHidden;
+      
+      await metadataStore.put(metadata);
       
       await tx.done;
       return {...media, ...metadata } as VideoFile;

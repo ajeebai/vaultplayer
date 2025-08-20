@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Library } from './components/Library';
 import { Player } from './components/Player';
 import { FileDropZone } from './components/FileDropZone';
@@ -145,12 +146,12 @@ const App: React.FC = () => {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [unsupportedMedia, setUnsupportedMedia] = useState<VideoFile | null>(null);
   const [theme, setTheme] = useState('vault');
-  const [showUnsupported, setShowUnsupported] = useState(() => {
-    return localStorage.getItem('vault-showUnsupported') === 'true';
+  const [showHidden, setShowHidden] = useState(() => {
+    return localStorage.getItem('vault-showHidden') === 'true';
   });
 
   const db = useMemo(() => new MediaDB(), []);
-
+  
   useEffect(() => {
     const savedTheme = localStorage.getItem('vault-theme') || 'vault';
     setTheme(savedTheme);
@@ -162,8 +163,8 @@ const App: React.FC = () => {
   }, [theme]);
   
   useEffect(() => {
-    localStorage.setItem('vault-showUnsupported', String(showUnsupported));
-  }, [showUnsupported]);
+    localStorage.setItem('vault-showHidden', String(showHidden));
+  }, [showHidden]);
 
   const handleToggleTheme = () => {
     setTheme(current => {
@@ -188,15 +189,6 @@ const App: React.FC = () => {
       case 'progress':
         setAppState(prev => ({ ...prev, isLoading: true, progress: update.payload.progress, progressMessage: update.payload.message }));
         break;
-      case 'initial_files': // Handles new files from initial scan or refresh
-        setAppState(prev => ({
-          ...prev,
-          media: [...prev.media, ...update.payload].sort((a: VideoFile, b: VideoFile) => a.fullPath.localeCompare(b.fullPath)),
-          isLoading: true,
-          progress: 0,
-          progressMessage: 'Processing new media...'
-        }));
-        break;
       case 'deleted_files':
         setAppState(prev => ({
             ...prev,
@@ -205,12 +197,16 @@ const App: React.FC = () => {
         break;
       case 'update_files':
          setAppState(prev => {
-            const mediaMap = new Map(prev.media.map(v => [v.fullPath, v]));
-            for (const mediaFile of update.payload) {
-                mediaMap.set(mediaFile.fullPath, mediaFile);
-            }
-            const newMedia = Array.from(mediaMap.values());
-            return { ...prev, media: newMedia.sort((a, b) => a.fullPath.localeCompare(b.fullPath)) };
+            const updatesMap = new Map(update.payload.map((v: VideoFile) => [v.fullPath, v]));
+            const existingPathsInState = new Set(prev.media.map(v => v.fullPath));
+    
+            // Update existing items in place to preserve order
+            const updatedMedia = prev.media.map(v => updatesMap.get(v.fullPath) || v);
+            
+            // Find items that are in the update but not in the original state, and append them
+            const newFiles = update.payload.filter((v: VideoFile) => !existingPathsInState.has(v.fullPath));
+            
+            return { ...prev, media: [...updatedMedia, ...newFiles] };
         });
         break;
       case 'error':
@@ -218,7 +214,9 @@ const App: React.FC = () => {
         setAppState(prev => ({ ...prev, isLoading: false, progressMessage: `Error: ${update.payload}` }));
         break;
       case 'complete':
-        setAppState(prev => ({ ...prev, isLoading: false, progress: 100, progressMessage: 'Library up to date!' }));
+        setAppState(prev => {
+          return { ...prev, isLoading: false, progress: 100, progressMessage: 'Library up to date!' };
+        });
         break;
     }
   }, []));
@@ -233,7 +231,7 @@ const App: React.FC = () => {
     const mediaFiles = await db.getAllMedia(library.id);
 
     if (mediaFiles.length > 0) {
-      setAppState(prev => ({ ...prev, media: mediaFiles.sort((a, b) => a.fullPath.localeCompare(b.fullPath)), view: View.Library, isLoading: false }));
+      setAppState(prev => ({ ...prev, media: mediaFiles, view: View.Library, isLoading: false }));
       if (hasPermission) {
         startProcessingUnprocessed(library.id);
       } else {
@@ -285,6 +283,11 @@ const App: React.FC = () => {
   }, [appState.media]);
 
   const handleSelectVideo = async (videoFile: VideoFile) => {
+    if (videoFile.isPlayable === false) {
+      setUnsupportedMedia(videoFile);
+      return;
+    }
+    
     if (!activeLibrary) {
       console.error("Cannot open media, no active library.");
       alert("An error occurred: No active library selected.");
@@ -311,7 +314,8 @@ const App: React.FC = () => {
     setSelectedCategoryPath(null);
     setSelectedTag(null);
   
-    const existingIndex = libraries.findIndex(lib => lib.handle.isSameEntry(handle));
+    const isSameEntryChecks = await Promise.all(libraries.map(lib => lib.handle.isSameEntry(handle)));
+    const existingIndex = isSameEntryChecks.findIndex(isSame => isSame);
   
     let newLibrary: LibraryInfo;
     let tempLibraries = [...libraries];
@@ -440,6 +444,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleToggleHidden = async (fullPath: string) => {
+    if (!activeLibrary) return;
+    const updatedMedia = await db.toggleHidden(activeLibrary.id, fullPath);
+    if (updatedMedia) {
+      setAppState(prev => ({
+        ...prev,
+        media: prev.media.map(v => v.fullPath === fullPath ? updatedMedia : v),
+      }));
+    }
+  };
+
   const handleUpdateTags = async (fullPath: string, tags: string[]) => {
     if (!activeLibrary) return;
     const updatedMedia = await db.updateTags(activeLibrary.id, fullPath, tags);
@@ -487,6 +502,7 @@ const App: React.FC = () => {
             searchQuery={appState.searchQuery}
             isFavoritesView={isFavoritesView}
             onToggleFavorite={handleToggleFavorite}
+            onToggleHidden={handleToggleHidden}
             onUpdateTags={handleUpdateTags}
             selectedCategoryPath={selectedCategoryPath}
             onSelectCategory={handleSelectCategory}
@@ -495,7 +511,7 @@ const App: React.FC = () => {
             onGoHome={handleGoHome}
             hasLibraries={libraries.length > 0}
             onPrioritizeMedia={prioritizeMedia}
-            showUnsupported={showUnsupported}
+            showHidden={showHidden}
             onClearContinueWatching={handleClearContinueWatching}
           />
         );
@@ -516,7 +532,6 @@ const App: React.FC = () => {
 
   return (
     <div className="bg-brand-black min-h-screen">
-      <div className={`theater-mode-dim ${appState.view === View.Player ? 'is-active' : ''}`} />
       {appState.view === View.Library && activeLibrary && (
         <Header 
           onSearch={handleSearch} 
@@ -532,8 +547,11 @@ const App: React.FC = () => {
           onManageLibraries={() => setIsManageOpen(true)}
           isPickerSupported={isPickerSupported}
           onToggleTheme={handleToggleTheme}
-          showUnsupported={showUnsupported}
-          onToggleUnsupported={() => setShowUnsupported(p => !p)}
+          isLoading={appState.isLoading && appState.media.length > 0}
+          progress={appState.progress}
+          progressMessage={appState.progressMessage}
+          showHidden={showHidden}
+          onToggleHidden={() => setShowHidden(p => !p)}
         />
       )}
       <main>

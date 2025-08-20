@@ -16,8 +16,11 @@ interface HeaderProps {
   onManageLibraries: () => void;
   isPickerSupported: boolean;
   onToggleTheme: () => void;
-  showUnsupported: boolean;
-  onToggleUnsupported: () => void;
+  isLoading: boolean;
+  progress: number;
+  progressMessage: string;
+  showHidden: boolean;
+  onToggleHidden: () => void;
 }
 
 const SearchIcon: React.FC<{className?: string; onClick?: () => void;}> = ({className, onClick}) => (<svg onClick={onClick} className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>);
@@ -67,8 +70,11 @@ export const Header: React.FC<HeaderProps> = ({
   onManageLibraries,
   isPickerSupported,
   onToggleTheme,
-  showUnsupported,
-  onToggleUnsupported,
+  isLoading,
+  progress,
+  progressMessage,
+  showHidden,
+  onToggleHidden,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
@@ -138,12 +144,12 @@ export const Header: React.FC<HeaderProps> = ({
       onDragLeave={() => setIsDragging(false)}
     >
       <div className="p-4 flex justify-between items-center">
-        <div className="flex items-center space-x-8">
+        <div className="flex items-center space-x-4 md:space-x-8">
           <h1 onClick={onGoHome} className="text-xl md:text-3xl font-black text-brand-red cursor-pointer select-none tracking-tighter">Vault</h1>
-          <nav className="hidden md:flex items-center space-x-6">
+          <nav className="flex items-center space-x-6">
               <div className="relative" ref={libraryMenuRef}>
                  <button onClick={() => setIsLibraryOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
-                   <span className="font-medium">{activeLibrary.name}</span>
+                   <span className="font-medium max-w-[120px] sm:max-w-none truncate">{activeLibrary.name}</span>
                    <ChevronDownIcon className="w-5 h-5"/>
                  </button>
                  {isLibraryOpen && (
@@ -160,7 +166,7 @@ export const Header: React.FC<HeaderProps> = ({
                    </div>
                  )}
               </div>
-               <div className="relative" ref={categoryMenuRef}>
+               <div className="relative hidden md:block" ref={categoryMenuRef}>
                  <button onClick={() => setIsCategoryOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
                    <span className="font-medium">Categories</span>
                    <ChevronDownIcon className="w-5 h-5"/>
@@ -176,7 +182,7 @@ export const Header: React.FC<HeaderProps> = ({
                    </div>
                  )}
               </div>
-              <div className="relative" ref={tagMenuRef}>
+              <div className="relative hidden md:block" ref={tagMenuRef}>
                  <button onClick={() => setIsTagOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
                    <span className="font-medium">Tags</span>
                    <ChevronDownIcon className="w-5 h-5"/>
@@ -196,9 +202,9 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
         </div>
         
-        <div className="flex items-center space-x-4">
-            <button onClick={onToggleUnsupported} className="text-gray-300 hover:text-white transition-colors" title={showUnsupported ? "Hide unsupported files" : "Show unsupported files"}>
-                {showUnsupported ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
+        <div className="flex items-center space-x-2 sm:space-x-4">
+            <button onClick={onToggleHidden} className="text-gray-300 hover:text-white transition-colors" title={showHidden ? "Hide hidden files" : "Show hidden files"}>
+                {showHidden ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
             </button>
             <div className="flex items-center">
                 {isSearchActive ? (
@@ -208,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
                         placeholder="Search..."
                         onChange={e => onSearch(e.target.value)}
                         onBlur={() => setIsSearchActive(false)}
-                        className="bg-transparent text-white placeholder-gray-500 rounded-md py-1 px-2 border-b border-brand-light-gray focus:outline-none w-32 md:w-48"
+                        className="bg-transparent text-white placeholder-gray-500 rounded-md py-1 px-2 border-b border-brand-light-gray focus:outline-none w-24 sm:w-32 md:w-48"
                     />
                 ) : (
                     <button onClick={() => setIsSearchActive(true)} className="text-gray-300 hover:text-white transition-colors">
@@ -221,6 +227,11 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
         </div>
       </div>
+      {isLoading && (
+        <div className="w-full h-0.5" title={`${progressMessage} (${Math.round(progress)}%)`}>
+            <div className="bg-brand-red h-full" style={{ width: `${progress}%`, transition: 'width 200ms ease-out' }}></div>
+        </div>
+      )}
     </header>
   );
 };
