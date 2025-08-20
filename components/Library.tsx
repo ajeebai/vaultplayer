@@ -7,6 +7,8 @@ import { VideoFile } from '../services/db';
 import { CategoryNode } from '../types';
 import { findNodeByPath, getAllMediaFromNode } from '../utils/category';
 
+const ShuffleIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.667 0l3.181-3.183m-4.991-2.691v4.992h-4.992m0 0l-3.181-3.183a8.25 8.25 0 0111.667 0l3.181 3.183" /></svg>);
+
 interface LibraryProps {
   media: VideoFile[];
   categoryTree: CategoryNode[];
@@ -28,6 +30,7 @@ interface LibraryProps {
   onPrioritizeMedia: (media: VideoFile) => void;
   showHidden: boolean;
   onClearContinueWatching?: () => void;
+  onPlayRemix: (videos: VideoFile[]) => void;
 }
 
 export const Library: React.FC<LibraryProps> = ({ 
@@ -51,6 +54,7 @@ export const Library: React.FC<LibraryProps> = ({
   onPrioritizeMedia,
   showHidden,
   onClearContinueWatching,
+  onPlayRemix,
 }) => {
 
   const displayedMedia = useMemo(() => {
@@ -131,12 +135,22 @@ export const Library: React.FC<LibraryProps> = ({
       if (!forceRail && node.children.length === 0) {
         return [(
           <section key={node.path} className="space-y-4">
-            <h2 
-              className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-brand-red transition-colors"
-              onClick={() => onSelectCategory(node.path)}
-            >
-              {node.name}
-            </h2>
+            <div className="flex items-center gap-2">
+              <h2 
+                className="text-xl md:text-2xl font-bold text-white cursor-pointer hover:text-brand-red transition-colors"
+                onClick={() => onSelectCategory(node.path)}
+              >
+                {node.name}
+              </h2>
+              <button
+                onClick={() => onPlayRemix(mediaForNode)}
+                disabled={mediaForNode.length === 0}
+                className="text-gray-400 hover:text-brand-red transition-colors disabled:text-gray-600 disabled:cursor-not-allowed"
+                title={`Remix ${node.name}`}
+              >
+                <ShuffleIcon className="w-5 h-5" />
+              </button>
+            </div>
             <VideoGrid 
               media={mediaForNode}
               onSelectVideo={onSelectVideo}
@@ -165,6 +179,8 @@ export const Library: React.FC<LibraryProps> = ({
         onSelectCategory={onSelectCategory}
         onUnsupportedMedia={onUnsupportedMedia}
         onPrioritizeMedia={onPrioritizeMedia}
+        allCategoryVideos={mediaForNode}
+        onPlayRemix={onPlayRemix}
       />];
     });
   }
@@ -191,6 +207,8 @@ export const Library: React.FC<LibraryProps> = ({
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
             onClear={onClearContinueWatching}
+            allCategoryVideos={continueWatching}
+            onPlayRemix={onPlayRemix}
           />
         )}
         {favorites.length > 0 && (
@@ -204,6 +222,8 @@ export const Library: React.FC<LibraryProps> = ({
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
+            allCategoryVideos={favorites}
+            onPlayRemix={onPlayRemix}
           />
         )}
         {rootFiles.length > 0 && (
@@ -217,6 +237,8 @@ export const Library: React.FC<LibraryProps> = ({
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
+            allCategoryVideos={rootFiles}
+            onPlayRemix={onPlayRemix}
           />
         )}
         {renderCategorySections(categoryTree, true)}
@@ -236,14 +258,26 @@ export const Library: React.FC<LibraryProps> = ({
     }
     
     if (currentCategoryNode) {
+      const mediaForNode = getMediaForNode(currentCategoryNode);
       // If the currently selected category is a LEAF node, display a single grid of its content.
       if (currentCategoryNode.children.length === 0) {
         return (
           <>
             <Breadcrumbs path={selectedCategoryPath || ''} onSelectCategory={onSelectCategory} onGoHome={onGoHome} />
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl md:text-2xl font-bold text-white">{currentCategoryNode.name}</h2>
+                <button
+                  onClick={() => onPlayRemix(mediaForNode)}
+                  disabled={mediaForNode.length === 0}
+                  className="text-gray-400 hover:text-brand-red transition-colors disabled:text-gray-600 disabled:cursor-not-allowed"
+                  title={`Remix ${currentCategoryNode.name}`}
+                >
+                  <ShuffleIcon className="w-5 h-5" />
+                </button>
+              </div>
               <VideoGrid
-                media={getMediaForNode(currentCategoryNode)}
+                media={mediaForNode}
                 onSelectVideo={onSelectVideo}
                 onToggleFavorite={onToggleFavorite}
                 onToggleHidden={onToggleHidden}
@@ -276,6 +310,8 @@ export const Library: React.FC<LibraryProps> = ({
                     onPrioritizeMedia={onPrioritizeMedia}
                     onSelectCategory={() => {}} // This rail's title is not for navigation
                     categoryPath={undefined}
+                    allCategoryVideos={filesInFolder}
+                    onPlayRemix={onPlayRemix}
                 />
             )}
             {/* 2. Render its children, allowing leaf children to become grids */}

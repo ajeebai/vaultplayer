@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Library } from './components/Library';
 import { Player } from './components/Player';
@@ -168,6 +169,7 @@ const App: React.FC = () => {
   const [isManageOpen, setIsManageOpen] = useState(false);
   const [unsupportedMedia, setUnsupportedMedia] = useState<VideoFile | null>(null);
   const [theme, setTheme] = useState('vault');
+  const [playlist, setPlaylist] = useState<VideoFile[] | null>(null);
   const [showHidden, setShowHidden] = useState(() => {
     return localStorage.getItem('vault-showHidden') === 'true';
   });
@@ -304,7 +306,48 @@ const App: React.FC = () => {
     setCategoryTree(buildCategoryTree(appState.media));
   }, [appState.media]);
 
+  const handlePlayPlaylist = async (playlist: VideoFile[], startWith?: VideoFile) => {
+    if (!activeLibrary) {
+      console.error("Cannot open media, no active library.");
+      alert("An error occurred: No active library selected.");
+      return;
+    }
+
+    if (playlist.length === 0) return;
+    
+    const firstVideo = startWith || playlist[0];
+
+    if (firstVideo.isPlayable === false) {
+      setUnsupportedMedia(firstVideo);
+      return;
+    }
+
+    const hasPermission = await verifyPermission(activeLibrary.handle, false);
+
+    if (hasPermission) {
+      setPlaylist(playlist);
+      setAppState(prev => ({ ...prev, view: View.Player, currentlyViewing: firstVideo }));
+    } else {
+      alert("Vault does not have permission to access this folder.\n\nThis can happen after a browser restart or if the app is running in a restricted context (like an iframe).\n\nPlease try adding the library again from the main screen to re-grant access.");
+    }
+  }
+
+  const handlePlayRemix = (videos: VideoFile[]) => {
+      if (videos.length === 0) return;
+
+      const playableVideos = videos.filter(v => v.isPlayable !== false);
+      if (playableVideos.length === 0) {
+          alert("No playable videos found in this category to create a remix.");
+          return;
+      }
+
+      const shuffled = [...playableVideos].sort(() => 0.5 - Math.random());
+      const remixPlaylist = shuffled.slice(0, 8);
+      handlePlayPlaylist(remixPlaylist);
+  };
+
   const handleSelectVideo = async (videoFile: VideoFile) => {
+    setPlaylist(null);
     if (videoFile.isPlayable === false) {
       setUnsupportedMedia(videoFile);
       return;
@@ -327,6 +370,7 @@ const App: React.FC = () => {
 
   const handleClosePlayer = async () => {
     if (!activeLibrary) return;
+    setPlaylist(null); // Clear playlist on close
     const mediaFiles = await db.getAllMedia(activeLibrary.id);
     setAppState(prev => ({ ...prev, media: mediaFiles, view: View.Library, currentlyViewing: null }));
   };
@@ -535,6 +579,7 @@ const App: React.FC = () => {
             onPrioritizeMedia={prioritizeMedia}
             showHidden={showHidden}
             onClearContinueWatching={handleClearContinueWatching}
+            onPlayRemix={handlePlayRemix}
           />
         );
       case View.Player:
@@ -544,6 +589,8 @@ const App: React.FC = () => {
               on_close={handleClosePlayer} 
               allVideos={appState.media}
               activeLibrary={activeLibrary}
+              playlist={playlist}
+              onSwitchVideo={(video) => setAppState(p => ({...p, currentlyViewing: video}))}
             />;
         }
         return null;
