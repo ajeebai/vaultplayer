@@ -26,6 +26,7 @@ interface LibraryProps {
   isFavoritesView: boolean;
   onPrioritizeMedia: (media: VideoFile) => void;
   showUnsupported: boolean;
+  onClearContinueWatching?: () => void;
 }
 
 const shuffle = <T,>(array: T[]): T[] => {
@@ -72,6 +73,7 @@ export const Library: React.FC<LibraryProps> = ({
   hasLibraries,
   onPrioritizeMedia,
   showUnsupported,
+  onClearContinueWatching,
 }) => {
 
   const displayedMedia = useMemo(() => {
@@ -185,6 +187,7 @@ export const Library: React.FC<LibraryProps> = ({
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
+            onClear={onClearContinueWatching}
           />
         )}
         {favorites.length > 0 && !isFavoritesView && !selectedCategoryPath && !searchQuery && !selectedTag &&(

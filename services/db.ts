@@ -296,4 +296,30 @@ export class MediaDB {
         await db.clear(METADATA_STORE_NAME);
     }
   }
+
+  async clearContinueWatching(libraryId: string): Promise<string[]> {
+    const db = await this.dbPromise;
+    const tx = db.transaction(VIDEO_STORE_NAME, 'readwrite');
+    const store = tx.objectStore(VIDEO_STORE_NAME);
+    const range = IDBKeyRange.bound([libraryId, ''], [libraryId, '\uffff']);
+    
+    let cursor = await store.openCursor(range);
+    const updatedPaths: string[] = [];
+
+    while (cursor) {
+        const media = cursor.value;
+        if (media.playbackPosition) {
+            const updatedMedia = { ...media };
+            // Using delete is cleaner than setting to undefined for IDB Object stores
+            delete updatedMedia.playbackPosition;
+            delete updatedMedia.lastWatched;
+            cursor.update(updatedMedia);
+            updatedPaths.push(media.fullPath);
+        }
+        cursor = await cursor.continue();
+    }
+
+    await tx.done;
+    return updatedPaths;
+  }
 }

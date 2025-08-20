@@ -22,9 +22,11 @@ const SkipPreviousIcon: React.FC<{className?: string}> = ({className}) => (<svg 
 const SkipNextIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 4.5v15" /></svg>);
 const PlaylistIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M3 6.75A.75.75 0 013.75 6h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 6.75zM3 12a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 12zm0 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 01-.75-.75z" clipRule="evenodd" /></svg>);
 const VideoPlaceholderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.66-1.34-3-3-3s-3 1.34-3 3v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V6h1v4.5c0 1.38-1.12 2.5-2.5 2.5S10 11.88 10 10.5V7c0-2.21 1.79-4 4-4s4 1.79 4 4v3.5c0 1.93-1.57 3.5-3.5 3.5S11 15.43 11 13.5V6H9.5v7.5c0 2.76 2.24 5 5 5s5-2.24 5-5V7h-1.5v3.5z"/></svg>);
-const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2h-8l-2-2z"></path></svg>);
+const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>);
 const ReturnIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7h-2z"></path></svg>);
-const FilmReelIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M18 4l2 4h-3l-2-4h-2l2 4h-3l-2-4H8l2 4H7L5 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V4h-4zM6 18H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V8h2v2zm12 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V8h2v2z"></path></svg>);
+const SparklesIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.55 3.55 3.55 1.55-3.55 1.55L12 12.7l-1.55-3.55-3.55-1.55 3.55-1.55L12 2.5zm0 8.5l-1.55 3.55-3.55 1.55 3.55 1.55L12 21.2l1.55-3.55 3.55-1.55-3.55-1.55L12 11zm8.5-4.5l-.94 2.14-2.14.94 2.14.94.94 2.14.94-2.14 2.14-.94-2.14-.94-.94-2.14z"/></svg>);
+const CheckIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>);
+
 
 interface PlayerProps {
   video: VideoFile;
@@ -129,6 +131,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSubtitleMenuOpen, setIsSubtitleMenuOpen] = useState(false);
+  const [isEffectsMenuOpen, setIsEffectsMenuOpen] = useState(false);
   const [isPlaylistOpen, setIsPlaylistOpen] = useState(false);
   const [activeTrackLabel, setActiveTrackLabel] = useState<string | null>(null);
   const [playlistPath, setPlaylistPath] = useState(initialVideo.parentPath);
@@ -136,7 +139,11 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const [isVisible, setIsVisible] = useState(false);
   const [ambilightUrl, setAmbilightUrl] = useState<string | null>(null);
   const [dominantColor, setDominantColor] = useState<string | null>(null);
-  const [isCinematicMode, setIsCinematicMode] = useState(false);
+  const [effects, setEffects] = useState({
+    letterbox: false,
+    filmGrain: false,
+    vintage: false,
+  });
   const [preloadedUrl, setPreloadedUrl] = useState<string | null>(null);
   const [showTitleCard, setShowTitleCard] = useState(true);
   
@@ -145,6 +152,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
   const controlsTimeoutRef = useRef<number | null>(null);
   const clickTimeoutRef = useRef<number | null>(null);
   const subtitleMenuRef = useRef<HTMLDivElement>(null);
+  const effectsMenuRef = useRef<HTMLDivElement>(null);
   const db = useMemo(() => new MediaDB(), []);
 
   const handleClose = useCallback(() => {
@@ -245,6 +253,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     if (isPlaying) {
       setIsControlsVisible(false);
       setIsSubtitleMenuOpen(false);
+      setIsEffectsMenuOpen(false);
     }
   }, [isPlaying]);
 
@@ -359,6 +368,9 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
       if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target as Node)) {
         setIsSubtitleMenuOpen(false);
       }
+      if (effectsMenuRef.current && !effectsMenuRef.current.contains(event.target as Node)) {
+        setIsEffectsMenuOpen(false);
+      }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -412,9 +424,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     }
   }, []);
 
-  const handleVideoAreaClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-
+  const handleVideoAreaClick = () => {
     if (isPlaylistOpen) {
         setIsPlaylistOpen(false);
         return;
@@ -471,8 +481,13 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
     setIsSubtitleMenuOpen(false);
   };
   
+  const handleToggleEffect = (effect: keyof typeof effects) => {
+    setEffects(prev => ({ ...prev, [effect]: !prev[effect] }));
+  };
+
   const progressPercentage = duration > 0 ? (progress / duration) * 100 : 0;
   const volumePercentage = isMuted ? 0 : volume * 100;
+  const isAnyEffectActive = Object.values(effects).some(v => v);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -548,36 +563,37 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
           onMouseMove={showControls}
           onMouseEnter={showControls}
           onMouseLeave={hideControls}
+          onClick={handleVideoAreaClick}
       >
         <video
           ref={videoRef}
           src={videoSrc || ''}
-          className="w-full h-full object-contain"
+          className={`w-full h-full object-contain ${effects.vintage ? 'video-effect-vintage' : ''}`}
           autoPlay
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           onEnded={handleNext}
-          onClick={handleVideoAreaClick}
         >
           {subtitles.map(sub => (
             <track key={sub.src} kind="subtitles" srcLang={sub.lang} src={sub.src} label={sub.label} />
           ))}
         </video>
         
-        {isCinematicMode && (
+        {effects.letterbox && (
           <>
             <div className="letterbox-overlay top-0"></div>
             <div className="letterbox-overlay bottom-0"></div>
-            <div className="film-grain-overlay"></div>
           </>
         )}
+        {effects.filmGrain && <div className="film-grain-overlay"></div>}
+        {effects.vintage && <div className="vignette-overlay"></div>}
 
         <div className={`absolute inset-0 player-controls ${!isControlsVisible ? 'player-controls-hidden' : ''}`}>
           {/* Top Controls */}
           <div 
-            className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center space-x-4 player-top-bar player-controls"
+            className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center space-x-4 player-top-bar"
             onMouseEnter={showControls}
             onClick={e => e.stopPropagation()}
           >
@@ -593,7 +609,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
 
           {/* Bottom Controls */}
           <div 
-            className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent player-bottom-bar player-controls"
+            className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent player-bottom-bar"
             onMouseEnter={showControls}
             onClick={e => e.stopPropagation()}
           >
@@ -606,7 +622,7 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                       max={duration}
                       value={progress}
                       onChange={handleSeek}
-                      className="w-full h-2 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb"
+                      className="w-full h-1 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb"
                       style={{ background: `linear-gradient(to right, var(--player-accent-color, var(--brand-red)) ${progressPercentage}%, rgba(128,128,128,0.5) ${progressPercentage}%)`}}
                   />
                   <span className="text-white text-sm">{formatDuration(duration)}</span>
@@ -646,9 +662,35 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                       </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                      <button onClick={() => setIsCinematicMode(c => !c)} className={`player-themed-button ${isCinematicMode ? 'player-active-button' : ''}`} title="Cinematic Mode">
-                          <FilmReelIcon className="w-7 h-7"/>
-                      </button>
+                      <div className="relative">
+                          <button onClick={() => setIsEffectsMenuOpen(o => !o)} className={`player-themed-button ${isAnyEffectActive ? 'player-active-button' : ''}`} title="Visual Effects">
+                              <SparklesIcon className="w-7 h-7"/>
+                          </button>
+                          {isEffectsMenuOpen && (
+                              <div ref={effectsMenuRef} className="absolute bottom-full right-0 mb-2 bg-black/80 backdrop-blur-sm rounded-md py-1 w-48 text-white">
+                                <ul>
+                                    <li>
+                                        <button onClick={() => handleToggleEffect('letterbox')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
+                                            Letterbox
+                                            {effects.letterbox && <CheckIcon className="w-5 h-5 player-active-button" />}
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button onClick={() => handleToggleEffect('filmGrain')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
+                                            Film Grain
+                                            {effects.filmGrain && <CheckIcon className="w-5 h-5 player-active-button" />}
+                                        </button>
+                                    </li>
+                                     <li>
+                                        <button onClick={() => handleToggleEffect('vintage')} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50 flex items-center justify-between">
+                                            8mm Vintage
+                                            {effects.vintage && <CheckIcon className="w-5 h-5 player-active-button" />}
+                                        </button>
+                                    </li>
+                                </ul>
+                              </div>
+                          )}
+                      </div>
                       <div className="relative">
                           {subtitles.length > 0 && 
                               <button onClick={() => setIsSubtitleMenuOpen(o => !o)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`}>

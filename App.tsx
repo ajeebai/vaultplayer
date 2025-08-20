@@ -450,6 +450,24 @@ const App: React.FC = () => {
       }));
     }
   };
+
+  const handleClearContinueWatching = async () => {
+    if (!activeLibrary) return;
+    if (window.confirm('Are you sure you want to clear your "Continue Watching" history? This cannot be undone.')) {
+        const clearedPaths = await db.clearContinueWatching(activeLibrary.id);
+        const clearedPathsSet = new Set(clearedPaths);
+        setAppState(prev => ({
+            ...prev,
+            media: prev.media.map(m => {
+                if (clearedPathsSet.has(m.fullPath)) {
+                    const { playbackPosition, lastWatched, ...rest } = m;
+                    return rest as VideoFile;
+                }
+                return m;
+            })
+        }));
+    }
+  };
   
   const renderContent = () => {
     switch (appState.view) {
@@ -478,6 +496,7 @@ const App: React.FC = () => {
             hasLibraries={libraries.length > 0}
             onPrioritizeMedia={prioritizeMedia}
             showUnsupported={showUnsupported}
+            onClearContinueWatching={handleClearContinueWatching}
           />
         );
       case View.Player:
