@@ -151,9 +151,10 @@ export const Library: React.FC<LibraryProps> = ({
       
       const numChunks = mediaForNode.length < (CHUNK_THRESHOLD * 2) ? 2 : 3;
       const mediaChunks = chunkArray(mediaForNode, numChunks);
+      const romanNumerals = ['I.', 'II.', 'III.'];
 
       return mediaChunks.map((chunk, index) => {
-          const title = numChunks > 1 ? `${node.name} (${index + 1}/${numChunks})` : node.name;
+          const title = numChunks > 1 ? `${node.name} ${romanNumerals[index]}` : node.name;
           return (
               <Rail
                   key={`${node.path}-${index}`}
