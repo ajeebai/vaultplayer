@@ -20,7 +20,7 @@ const SubtitlesIcon: React.FC<{className?: string}> = ({className}) => (<svg xml
 const CloseIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>);
 const SkipPreviousIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M18.75 19.5l-7.5-7.5 7.5-7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 19.5V4.5" /></svg>);
 const SkipNextIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M5.25 4.5l7.5 7.5-7.5 7.5" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 4.5v15" /></svg>);
-const PlaylistIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M3 6.75A.75.75 0 013.75 6h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 6.75zM3 12a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 12zm0 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" /></svg>);
+const PlaylistIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path fillRule="evenodd" d="M3 6.75a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 6.75zM3 12a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 12zm0 5.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" clipRule="evenodd" /></svg>);
 const VideoPlaceholderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-1.66-1.34-3-3-3s-3 1.34-3 3v3.5c0 .83.67 1.5 1.5 1.5s1.5-.67 1.5-1.5V6h1v4.5c0 1.38-1.12 2.5-2.5 2.5S10 11.88 10 10.5V7c0-2.21 1.79-4 4-4s4 1.79 4 4v3.5c0 1.93-1.57 3.5-3.5 3.5S11 15.43 11 13.5V6H9.5v7.5c0 2.76 2.24 5 5 5s5-2.24 5-5V7h-1.5v3.5z"/></svg>);
 const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"></path></svg>);
 const ReturnIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M19 7v4H5.83l3.58-3.59L8 6l-6 6 6 6 1.41-1.41L5.83 13H21V7h-2z"></path></svg>);
@@ -629,17 +629,17 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
               </div>
               {/* Buttons */}
               <div className="flex justify-between items-center mt-2">
-                  <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2 sm:space-x-4">
                       <button onClick={handlePrevious} disabled={!hasPrevious} className="player-themed-button">
                           <SkipPreviousIcon className="w-8 h-8"/>
                       </button>
-                      <button onClick={() => seek(-10)} className="player-themed-button">
+                      <button onClick={() => seek(-10)} className="hidden sm:block player-themed-button">
                           <Replay10Icon className="w-8 h-8"/>
                       </button>
                       <button onClick={togglePlay} className="player-themed-button">
                           {isPlaying ? <PauseIcon className="w-10 h-10"/> : <PlayIcon className="w-10 h-10"/>}
                       </button>
-                      <button onClick={() => seek(10)} className="player-themed-button">
+                      <button onClick={() => seek(10)} className="hidden sm:block player-themed-button">
                           <Forward10Icon className="w-8 h-8"/>
                       </button>
                       <button onClick={handleNext} disabled={!hasNext} className="player-themed-button">
@@ -656,12 +656,12 @@ export const Player: React.FC<PlayerProps> = ({ video: initialVideo, on_close, a
                               step="0.05"
                               value={isMuted ? 0 : volume}
                               onChange={handleVolumeChange}
-                              className="w-24 h-1 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb-sm"
+                              className="w-24 h-1 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb-sm hidden sm:block"
                               style={{ background: `linear-gradient(to right, var(--player-accent-color, var(--brand-red)) ${volumePercentage}%, rgba(128,128,128,0.5) ${volumePercentage}%)`}}
                           />
                       </div>
                   </div>
-                  <div className="flex items-center space-x-4">
+                  <div className="flex items-center space-x-2 sm:space-x-4">
                       <div className="relative">
                           <button onClick={() => setIsEffectsMenuOpen(o => !o)} className={`player-themed-button ${isAnyEffectActive ? 'player-active-button' : ''}`} title="Visual Effects">
                               <SparklesIcon className="w-7 h-7"/>

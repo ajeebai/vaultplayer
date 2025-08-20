@@ -25,7 +25,7 @@ const ChevronDownIcon: React.FC<{className?: string}> = ({className}) => (<svg c
 const ChevronRightIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path></svg>);
 const CheckIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>);
 const PaletteIcon: React.FC<{className?: string}> = ({className}) => (<svg className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5.67-1.5 1.5S5.67 15 6.5 15s1.5-.67 1.5-1.5S7.33 12 6.5 12zm3-4c-.83 0-1.5.67-1.5 1.5S8.67 11 9.5 11s1.5-.67 1.5-1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5zm3 4c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"></path></svg>);
-const EyeIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" /></svg>);
+const EyeIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path fillRule="evenodd" d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113-1.487 4.471-5.705 7.697-10.677 7.697-4.97 0-9.186-3.223-10.675-7.69a1.762 1.762 0 010-1.113zM17.25 12a5.25 5.25 0 11-10.5 0 5.25 5.25 0 0110.5 0z" clipRule="evenodd" /></svg>);
 const EyeSlashIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}><path d="M3.53 2.47a.75.75 0 00-1.06 1.06l18 18a.75.75 0 001.06-1.06l-18-18zM22.676 12.553a11.249 11.249 0 01-2.631 4.31l-3.099-3.099a5.25 5.25 0 00-6.71-6.71L7.759 4.577a11.217 11.217 0 014.242-.827c4.97 0 9.185 3.223 10.675 7.69.12.362.12.752 0 1.113z" /><path d="M15.75 12c0 .18-.013.357-.037.53l-4.244-4.243A5.25 5.25 0 0115.75 12zM12.53 15.713l-4.244-4.244a5.25 5.25 0 006.71 6.71l-1.43-1.43c-.428.1-.88.152-1.336.152a3 3 0 01-3-3c0-.456.052-.908.152-1.336l-1.43-1.43z" /><path d="M1.323 11.447C2.811 6.976 7.028 3.75 12.001 3.75c1.441 0 2.845.313 4.142.87l-1.518 1.518A11.222 11.222 0 0012.001 6C7.527 6 3.73 8.79 2.44 12.882a1.75 1.75 0 000 1.238c.192.58.427 1.13.702 1.654l-1.518 1.518A11.454 11.454 0 011.323 12.553z" /></svg>);
 
 const CategoryMenuItem: React.FC<{ node: CategoryNode; onSelect: (path: string) => void }> = ({ node, onSelect }) => {
@@ -138,12 +138,12 @@ export const Header: React.FC<HeaderProps> = ({
       onDragLeave={() => setIsDragging(false)}
     >
       <div className="p-4 flex justify-between items-center">
-        <div className="flex items-center space-x-8">
+        <div className="flex items-center space-x-4 md:space-x-8">
           <h1 onClick={onGoHome} className="text-xl md:text-3xl font-black text-brand-red cursor-pointer select-none tracking-tighter">Vault</h1>
-          <nav className="hidden md:flex items-center space-x-6">
+          <nav className="flex items-center space-x-6">
               <div className="relative" ref={libraryMenuRef}>
                  <button onClick={() => setIsLibraryOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
-                   <span className="font-medium">{activeLibrary.name}</span>
+                   <span className="font-medium max-w-[120px] sm:max-w-none truncate">{activeLibrary.name}</span>
                    <ChevronDownIcon className="w-5 h-5"/>
                  </button>
                  {isLibraryOpen && (
@@ -160,7 +160,7 @@ export const Header: React.FC<HeaderProps> = ({
                    </div>
                  )}
               </div>
-               <div className="relative" ref={categoryMenuRef}>
+               <div className="relative hidden md:block" ref={categoryMenuRef}>
                  <button onClick={() => setIsCategoryOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
                    <span className="font-medium">Categories</span>
                    <ChevronDownIcon className="w-5 h-5"/>
@@ -176,7 +176,7 @@ export const Header: React.FC<HeaderProps> = ({
                    </div>
                  )}
               </div>
-              <div className="relative" ref={tagMenuRef}>
+              <div className="relative hidden md:block" ref={tagMenuRef}>
                  <button onClick={() => setIsTagOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
                    <span className="font-medium">Tags</span>
                    <ChevronDownIcon className="w-5 h-5"/>
@@ -196,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({
           </nav>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 sm:space-x-4">
             <button onClick={onToggleUnsupported} className="text-gray-300 hover:text-white transition-colors" title={showUnsupported ? "Hide unsupported files" : "Show unsupported files"}>
                 {showUnsupported ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
             </button>
@@ -208,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({
                         placeholder="Search..."
                         onChange={e => onSearch(e.target.value)}
                         onBlur={() => setIsSearchActive(false)}
-                        className="bg-transparent text-white placeholder-gray-500 rounded-md py-1 px-2 border-b border-brand-light-gray focus:outline-none w-32 md:w-48"
+                        className="bg-transparent text-white placeholder-gray-500 rounded-md py-1 px-2 border-b border-brand-light-gray focus:outline-none w-24 sm:w-32 md:w-48"
                     />
                 ) : (
                     <button onClick={() => setIsSearchActive(true)} className="text-gray-300 hover:text-white transition-colors">
