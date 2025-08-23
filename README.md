@@ -1,5 +1,6 @@
 # Vault ✨
 
+<img width="1484" height="643" alt="image" src="https://github.com/user-attachments/assets/d3444d88-2f61-413e-b58a-bdaa5bb99968" />
 > Your media, your rules. No server required.
 
 Vault turns your messy folder of movies and TV shows into a beautiful, personal streaming service that works completely offline.
@@ -12,7 +13,8 @@ Give it a spin! (Don't worry, it's all happening in your browser.)
 
 **[➡️ Try Vault Live on Vercel](https://your-demo-link.vercel.app/)**
 
-![Vault App Screenshot](https://user-images.githubusercontent.com/12345/your-image-link.png)
+<img width="1490" height="1049" alt="image" src="https://github.com/user-attachments/assets/51eae804-e00d-4d7b-8bcc-52cb2875fce3" />
+
 *Just drag, drop, and you're ready to binge.*
 
 ---
@@ -63,10 +65,8 @@ And that's it! Your personal streaming vault is now running. Open your browser a
 
 If Vault has saved you from boredom or just made your movie collection look amazing, consider showing some love! Your support helps keep the project alive, ad-free, and constantly improving.
 
-<a href="https://gumroad.com/l/your-product" target="_blank">
-  <img src="https://img.shields.io/badge/Support%20on-Gumroad-ff69b4?style=for-the-badge&logo=gumroad" alt="Support on Gumroad">
-</a>
-<a href="https://www.buymeacoffee.com/your-username" target="_blank">
+
+<a href="https://www.buymeacoffee.com/notajeeb" target="_blank">
   <img src="https://img.shields.io/badge/Buy%20Me%20A-Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee" alt="Buy Me A Coffee">
 </a>
 
