@@ -1,11 +1,9 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VideoFile, MediaDB } from '../services/db';
 import { formatDuration } from '../utils/formatters';
 import { srtToVtt } from '../utils/srt2vtt';
 import { getFileWithPermission } from '../utils/fileSystem';
 import { LibraryInfo } from '../types';
-import { getDominantColor } from '../utils/color';
 
 // New, consistent, and intuitive line icon set
 const PlayIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" /></svg>);
@@ -132,6 +130,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [progress, setProgress] = useState(0);
+  const [buffered, setBuffered] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isControlsVisible, setIsControlsVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -165,28 +164,6 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
   }, []);
-
-  // Dynamic color theming
-  useEffect(() => {
-    let isMounted = true;
-    if (video.poster && playerContainerRef.current) {
-      getDominantColor(video.poster).then(color => {
-        if(isMounted && playerContainerRef.current) {
-          playerContainerRef.current.style.setProperty('--player-accent-color', color);
-        }
-      }).catch(err => {
-        console.warn("Could not get dominant color", err);
-      });
-    }
-
-    return () => {
-      isMounted = false;
-      // Reset color on cleanup
-      if(playerContainerRef.current) {
-        playerContainerRef.current.style.removeProperty('--player-accent-color');
-      }
-    };
-  }, [video]);
 
   useEffect(() => {
     if (!playlist) { // Only reset playlist path if not in a remix playlist
@@ -306,6 +283,15 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     };
   }, [video]);
   
+  const handleProgress = () => {
+    if (!videoRef.current) return;
+    const videoNode = videoRef.current;
+    if (videoNode.buffered.length > 0) {
+      const bufferedEnd = videoNode.buffered.end(videoNode.buffered.length - 1);
+      setBuffered(bufferedEnd);
+    }
+  };
+  
   // Video event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current) {
@@ -323,7 +309,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
         videoRef.current.play();
@@ -333,7 +319,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         setIsPlaying(false);
       }
     }
-  };
+  }, []);
   
   // Controls visibility logic
   const showControls = useCallback(() => {
@@ -362,29 +348,36 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
       setIsControlsVisible(false);
     }
   }
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      playerContainerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
+    }
+  }, []);
   
-  const handleSingleClick = () => {
-      togglePlay();
-  };
-
-  const handleDoubleClick = () => {
-    toggleFullscreen();
-  };
-
-  const handleClick = () => {
-    if (clickTimeoutRef.current !== null) {
-      // Double click detected
+  const handleClick = useCallback(() => {
+    if (clickTimeoutRef.current) {
       clearTimeout(clickTimeoutRef.current);
       clickTimeoutRef.current = null;
-      handleDoubleClick();
+      toggleFullscreen();
     } else {
-      // Single click
       clickTimeoutRef.current = window.setTimeout(() => {
-        handleSingleClick();
+        togglePlay();
         clickTimeoutRef.current = null;
       }, 250);
     }
-  };
+  }, [togglePlay, toggleFullscreen]);
+  
+  useEffect(() => {
+      return () => {
+          if (clickTimeoutRef.current) {
+              clearTimeout(clickTimeoutRef.current);
+          }
+      }
+  }, []);
+
 
   // Seeking logic
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -404,7 +397,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   };
 
-  const toggleMute = () => {
+  const toggleMute = useCallback(() => {
     if (videoRef.current) {
       const newMutedState = !isMuted;
       videoRef.current.muted = newMutedState;
@@ -414,16 +407,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         videoRef.current.volume = 0.5;
       }
     }
-  };
+  }, [isMuted, volume]);
   
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      playerContainerRef.current?.requestFullscreen();
-    } else {
-      document.exitFullscreen();
-    }
-  };
-
   const togglePip = async () => {
     if (!videoRef.current) return;
     try {
@@ -509,13 +494,11 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
           break;
         case 'ArrowUp':
           e.preventDefault();
-          if (videoRef.current && videoRef.current.volume < 1) videoRef.current.volume = Math.min(1, videoRef.current.volume + 0.1);
-          setVolume(videoRef.current?.volume || 0);
+          handleSkip('prev');
           break;
         case 'ArrowDown':
           e.preventDefault();
-          if (videoRef.current && videoRef.current.volume > 0) videoRef.current.volume = Math.max(0, videoRef.current.volume - 0.1);
-          setVolume(videoRef.current?.volume || 0);
+          handleSkip('next');
           break;
         case 'Escape':
           e.preventDefault();
@@ -585,6 +568,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
             autoPlay
             onTimeUpdate={handleTimeUpdate}
             onDurationChange={handleDurationChange}
+            onProgress={handleProgress}
             onPlay={() => setIsPlaying(true)}
             onPause={() => setIsPlaying(false)}
             onEnded={() => handleSkip('next')}
@@ -616,14 +600,20 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
            {/* Seek bar */}
           <div className="flex items-center space-x-4 mb-2">
             <span className="text-white text-sm font-mono">{formatDuration(progress)}</span>
-            <input
-              type="range"
-              min="0"
-              max={duration || 0}
-              value={progress || 0}
-              onChange={handleSeek}
-              className="w-full h-1.5 accent-[var(--player-accent-color,var(--brand-red))] bg-white/20 rounded-lg appearance-none cursor-pointer range-thumb"
-            />
+            <div className="relative w-full h-4 flex items-center group">
+                <div className="absolute w-full h-1.5 bg-white/20 rounded-lg">
+                    <div className="absolute h-full bg-white/40 rounded-lg" style={{ width: `${(buffered / duration) * 100}%` }}></div>
+                    <div className="absolute h-full player-active-bg rounded-lg" style={{ width: `${(progress / duration) * 100}%` }}></div>
+                </div>
+                <input
+                    type="range"
+                    min="0"
+                    max={duration || 0}
+                    value={progress || 0}
+                    onChange={handleSeek}
+                    className="w-full h-full bg-transparent appearance-none cursor-pointer range-thumb"
+                />
+            </div>
             <span className="text-white text-sm font-mono">{formatDuration(duration)}</span>
           </div>
         
@@ -631,21 +621,26 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
             {/* Left controls */}
             <div className="flex items-center space-x-4">
               <button onClick={() => handleSkip('prev')} className="player-themed-button" disabled={currentVideoIndex === -1}><SkipPreviousIcon className="w-6 h-6"/></button>
-              <button onClick={() => togglePlay()} className="player-themed-button">{isPlaying ? <PauseIcon className="w-8 h-8"/> : <PlayIcon className="w-8 h-8"/>}</button>
+              <button onClick={togglePlay} className="player-themed-button">{isPlaying ? <PauseIcon className="w-8 h-8"/> : <PlayIcon className="w-8 h-8"/>}</button>
               <button onClick={() => handleSkip('next')} className="player-themed-button" disabled={currentVideoIndex === -1}><SkipNextIcon className="w-6 h-6"/></button>
               <div className="flex items-center space-x-2">
                 <button onClick={toggleMute} className="player-themed-button">
                   {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6"/> : <VolumeHighIcon className="w-6 h-6"/>}
                 </button>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  className="w-24 h-1 accent-[var(--player-accent-color,var(--brand-red))] bg-white/20 rounded-lg appearance-none cursor-pointer range-thumb-sm"
-                />
+                <div className="relative w-24 h-4 flex items-center group">
+                    <div className="absolute w-full h-1 bg-white/20 rounded-lg">
+                        <div className="absolute h-full player-active-bg rounded-lg" style={{ width: `${isMuted ? 0 : volume * 100}%` }}></div>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={isMuted ? 0 : volume}
+                      onChange={handleVolumeChange}
+                      className="w-full h-full bg-transparent appearance-none cursor-pointer range-thumb-sm"
+                    />
+                </div>
               </div>
             </div>
 
@@ -686,10 +681,15 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
       </div>
       
       {/* Playlist Panel */}
-      <div className="absolute bottom-24 right-4 w-96 max-w-[90vw] bg-brand-black/80 backdrop-blur-sm rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isPlaylistOpen ? '60vh' : '0' }}>
+      <div className="absolute bottom-24 right-4 w-96 max-w-[90vw] bg-black/70 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isPlaylistOpen ? '60vh' : '0' }}>
           <div className="p-2">
-              <h3 className="font-bold text-lg mb-2 px-2">{playlistTitle}</h3>
-              <ul className="space-y-1 p-2 overflow-y-auto" style={{ maxHeight: '55vh' }}>
+              <div className="flex justify-between items-center mb-2 px-2">
+                <h3 className="font-bold text-lg">{playlistTitle}</h3>
+                <button onClick={() => setIsPlaylistOpen(false)} className="player-themed-button">
+                    <CloseIcon className="w-6 h-6"/>
+                </button>
+              </div>
+              <ul className="space-y-1 p-2 overflow-y-auto" style={{ maxHeight: 'calc(60vh - 4rem)' }}>
                   {playlistItems.map((item) => (
                       <PlaylistItem
                           key={item.type === 'video' ? item.data.fullPath : item.data.path}
@@ -705,30 +705,3 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     </div>
   );
 };
-
-// Custom styles for range inputs
-const style = document.createElement('style');
-style.innerHTML = `
-.range-thumb::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--player-accent-color, var(--brand-red));
-  cursor: pointer;
-  box-shadow: 0 0 5px var(--brand-red-glow);
-  transition: background 0.2s ease;
-}
-.range-thumb-sm::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--player-accent-color, var(--brand-red));
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-`;
-document.head.appendChild(style);

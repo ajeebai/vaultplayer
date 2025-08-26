@@ -10,7 +10,7 @@
       /* Fonts */
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700;900&display=swap');
       @import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,400;0,6..12,700;0,6..12,900;1,6..12,400&display=swap');
-      @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap');
       
       :root {
         --font-sans: 'Inter', sans-serif;
@@ -34,68 +34,22 @@
         transition: background-color 0.3s ease;
       }
 
-      /* DITHER THEME STYLES */
-      [data-theme="dither"] {
-        --font-sans: 'VT323', monospace;
-        --brand-red: #00FF00; /* Bright Green */
-        --brand-red-glow: rgba(0, 255, 0, 0.3);
-        --brand-black: #000000;
-        --brand-gray: #111111;
-        --brand-light-gray: #222222;
-        --text-primary: #00FF00;
-        --text-secondary: #008F00;
-        --background-color: #000000;
-        -webkit-font-smoothing: none;
-        -moz-osx-font-smoothing: none;
-      }
-      
-      [data-theme="dither"] body {
-        background-image: radial-gradient(var(--brand-gray) 1px, transparent 0);
-        background-size: 4px 4px;
-        background-position: -19px -19px;
-      }
-      
-      [data-theme="dither"] button,
-      [data-theme="dither"] input[type="text"],
-      [data-theme="dither"] input[type="search"] {
-        border: 2px solid;
-        border-color: #333 #000 #000 #333;
-        background-color: var(--brand-gray);
-        box-shadow: inset 2px 2px 0 #444, inset -2px -2px 0 #000;
-      }
-      
-      [data-theme="dither"] button:hover {
-        background-color: var(--brand-light-gray);
+      /* VELVET THEME STYLES - More sensual and visually exciting */
+      [data-theme="velvet"] {
+        --font-sans: 'Lora', serif;
+        --brand-red: #991B1B; /* Deep Crimson */
+        --brand-red-glow: rgba(153, 27, 27, 0.5);
+        --brand-black: #1c1917; /* stone-900 */
+        --brand-gray: #292524; /* stone-800 */
+        --brand-light-gray: #44403C; /* stone-700 */
+        --text-primary: #f5f5f4; /* stone-100 */
+        --text-secondary: #a8a29e; /* stone-400 */
+        --background-color: #1c1917;
       }
 
-      [data-theme="dither"] button:active {
-        border-color: #000 #333 #333 #000;
-        box-shadow: inset -2px -2px 0 #444, inset 2px 2px 0 #000;
-      }
-
-      [data-theme="dither"] input:focus {
-        outline: 1px dotted var(--brand-red);
-        outline-offset: -3px;
-      }
-
-      [data-theme="dither"] .range-thumb::-webkit-slider-thumb,
-      [data-theme="dither"] .range-thumb-sm::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          background: var(--player-accent-color, var(--brand-red));
-          width: 14px;
-          height: 14px;
-          box-shadow: 0 0 0 1px var(--text-secondary);
-      }
-      [data-theme="dither"] .range-thumb::-webkit-slider-thumb {
-          margin-top: -4px; /* Center 14px thumb on 6px track */
-      }
-      [data-theme="dither"] .range-thumb-sm::-webkit-slider-thumb {
-          margin-top: -5px; /* Center 14px thumb on 4px track */
-      }
-      [data-theme="dither"] ::-webkit-scrollbar-thumb {
-          background-color: var(--text-secondary) !important;
-          border-radius: 0 !important;
+      html[data-theme="velvet"] {
+        background-image: radial-gradient(circle at top, #292524 0%, #1c1917 80%);
+        background-attachment: fixed;
       }
 
       /* DREAMSCAPE THEME STYLES */
@@ -138,8 +92,6 @@
         box-shadow: 0 20px 35px -8px rgba(167, 139, 250, 0.25), 0 10px 15px -8px rgba(167, 139, 250, 0.25);
        }
       [data-theme="dreamscape"] ::-webkit-scrollbar-thumb { background-color: var(--brand-light-gray) !important; border-radius: 10px !important; }
-      [data-theme="dreamscape"] .range-thumb::-webkit-slider-thumb,
-      [data-theme="dreamscape"] .range-thumb-sm::-webkit-slider-thumb { background: var(--player-accent-color, var(--brand-red)); box-shadow: 0 0 5px var(--brand-red-glow); }
       [data-theme="dreamscape"] .footer-glow { color: var(--brand-red); -webkit-text-stroke: 0; text-shadow: 0 0 45px var(--brand-red-glow), 0 0 20px var(--brand-red); }
       
       /* FOOTER */
@@ -151,10 +103,6 @@
         -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%);
         font-size: 35vw;
         line-height: 1;
-      }
-      [data-theme="dither"] .footer-glow {
-        -webkit-text-stroke: 1px var(--brand-red);
-        text-shadow: 0 0 10px var(--brand-red-glow);
       }
 
       /* PLAYER STYLES */
@@ -202,6 +150,28 @@
       }
       .player-active-bg-light {
         background-color: color-mix(in srgb, var(--player-accent-color, var(--brand-red)) 80%, transparent);
+      }
+
+      /* PLAYER SLIDER STYLES - Consistent Across Themes */
+      .range-thumb::-webkit-slider-thumb, .range-thumb-sm::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        background: var(--player-accent-color, var(--brand-red));
+        cursor: pointer;
+        transition: background 0.2s ease;
+        border-radius: 50%;
+        border: none;
+        box-shadow: 0 0 5px var(--brand-red-glow), 0 0 0 1px rgba(0,0,0,0.2);
+      }
+      .range-thumb::-webkit-slider-thumb {
+        width: 16px;
+        height: 16px;
+        margin-top: -5px; /* (Track height 6px - Thumb height 16px) / 2 */
+      }
+      .range-thumb-sm::-webkit-slider-thumb {
+        width: 12px;
+        height: 12px;
+        margin-top: -4px; /* (Track height 4px - Thumb height 12px) / 2 */
       }
     </style>
     <script>

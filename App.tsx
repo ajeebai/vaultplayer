@@ -197,8 +197,8 @@ const App: React.FC = () => {
 
   const handleToggleTheme = () => {
     setTheme(current => {
-      if (current === 'vault') return 'dither';
-      if (current === 'dither') return 'dreamscape';
+      if (current === 'vault') return 'velvet';
+      if (current === 'velvet') return 'dreamscape';
       return 'vault';
     });
   };
