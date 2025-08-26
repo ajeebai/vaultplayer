@@ -83,23 +83,35 @@ const ManageLibrariesModal: React.FC<{
   );
 };
 
-const ClipboardIcon: React.FC<{ className?: string }> = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>);
-const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>);
+const FolderOpenIcon: React.FC<{ className?: string }> = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" /></svg>);
 
 const UnsupportedMediaModal: React.FC<{ media: VideoFile; onClose: () => void; }> = ({ media, onClose }) => {
     const [isCopied, setIsCopied] = useState(false);
+    const [showInstructions, setShowInstructions] = useState(false);
 
-    const handleCopyPath = () => {
-        if (isCopied) return;
-        navigator.clipboard.writeText(media.fullPath).then(() => {
+    const isMac = useMemo(() => navigator.platform.toUpperCase().indexOf('MAC') >= 0, []);
+    
+    const folderPath = useMemo(() => {
+      const lastSlash = media.fullPath.lastIndexOf('/');
+      if (lastSlash === -1) return '(root folder)'; // Should not happen if path is correct
+      return media.fullPath.substring(0, lastSlash);
+    }, [media.fullPath]);
+
+    const handleShowInFolder = useCallback(() => {
+        if (folderPath === '(root folder)') {
+            alert("Cannot determine folder path for root files.");
+            return;
+        }
+        navigator.clipboard.writeText(folderPath).then(() => {
             setIsCopied(true);
-            const timer = setTimeout(() => setIsCopied(false), 2500);
+            setShowInstructions(true);
+            const timer = setTimeout(() => setIsCopied(false), 3000);
             return () => clearTimeout(timer);
         }).catch(err => {
             console.error('Failed to copy path: ', err);
             alert('Could not copy path to clipboard.');
         });
-    };
+    }, [folderPath]);
 
     const reasonCode = media.unsupportedReason?.code;
     let reasonMessage = "This video's format or internal codec is not supported by your browser.";
@@ -112,33 +124,37 @@ const UnsupportedMediaModal: React.FC<{ media: VideoFile; onClose: () => void; }
             <div className="bg-brand-gray rounded-lg shadow-xl p-8 w-full max-w-lg" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-bold mb-2">Unsupported Video</h2>
                 <p className="text-gray-400 mb-4">{reasonMessage}</p>
+                 <div className="bg-brand-black p-3 rounded-md mb-6 text-sm">
+                    <p className="text-gray-400 mb-1">File:</p>
+                    <code className="text-white break-all font-mono">{media.name}</code>
+                    <p className="text-gray-400 mt-2 mb-1">In Folder:</p>
+                    <code className="text-white break-all font-mono">{folderPath}</code>
+                </div>
+                
                 <p className="text-gray-400 mb-6">
-                    To watch it, we recommend opening the file with a desktop player like <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener noreferrer" className="text-brand-red hover:underline">VLC Media Player</a>, which supports a much wider range of video formats.
+                    While Vault can't open this file, you can open its folder on your computer to watch it with a desktop player like <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener noreferrer" className="text-brand-red hover:underline">VLC Media Player</a>.
                 </p>
                 
-                <div 
-                  onClick={handleCopyPath}
-                  className="bg-brand-black p-3 rounded-md mb-6 relative group cursor-pointer border border-transparent hover:border-brand-red transition-colors"
+                <button 
+                  onClick={handleShowInFolder}
+                  className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-md bg-brand-red text-white font-bold hover:bg-red-700 transition-colors"
                 >
-                    <p className="text-sm text-gray-400 mb-1">File path (click to copy):</p>
-                    <div className="flex justify-between items-center">
-                        <code className="text-white break-all font-mono pr-4">{media.fullPath}</code>
-                        <div className="text-gray-400 group-hover:text-white transition-colors">
-                             {isCopied ? <CheckIcon className="w-5 h-5 text-green-400" /> : <ClipboardIcon className="w-5 h-5" />}
-                        </div>
-                    </div>
-                    <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 bg-brand-red text-white text-xs px-2 py-0.5 rounded-full transition-all duration-300 ${isCopied ? 'opacity-100 translate-y-full' : 'opacity-0'}`}>Copied!</div>
+                    <FolderOpenIcon className="w-6 h-6" />
+                    <span>Open Containing Folder</span>
+                </button>
+                
+                <div className={`mt-4 text-center text-sm transition-all duration-300 ${showInstructions ? 'opacity-100 max-h-40' : 'opacity-0 max-h-0 overflow-hidden'}`}>
+                    <p className="text-green-400 font-semibold">{isCopied ? 'Folder path copied to clipboard!' : ' '}</p>
+                    <p className="text-gray-300 mt-1">
+                        {isMac 
+                            ? <>In Finder, press <kbd>⌘+Shift+G</kbd>, paste the path, and press Enter.</>
+                            : <>In File Explorer, click the address bar, paste the path, and press Enter.</>
+                        }
+                    </p>
                 </div>
 
-                {media.unsupportedReason?.message && (
-                    <div className="bg-brand-black p-3 rounded-md mb-6">
-                        <p className="text-sm text-gray-400">Browser Error:</p>
-                        <code className="text-gray-500 break-all text-xs font-mono">{media.unsupportedReason.message}</code>
-                    </div>
-                )}
-
                 <div className="flex justify-end mt-8">
-                    <button onClick={onClose} className="py-2 px-6 rounded-md bg-brand-red text-white font-bold hover:bg-red-700 transition-colors">Close</button>
+                    <button onClick={onClose} className="py-2 px-6 rounded-md bg-brand-light-gray text-white font-bold hover:bg-gray-500 transition-colors">Close</button>
                 </div>
             </div>
         </div>
@@ -583,6 +599,7 @@ const App: React.FC = () => {
               searchQuery={appState.searchQuery}
               onToggleFavorite={handleToggleFavorite}
               onToggleHidden={handleToggleHidden}
+              // Fix: Corrected typo. The handler for updating tags is `handleUpdateTags`, not `onUpdateTags`.
               onUpdateTags={handleUpdateTags}
               selectedCategoryPath={selectedCategoryPath}
               onSelectCategory={handleSelectCategory}

@@ -59,9 +59,17 @@ const PlaylistItem: React.FC<{
     onVideoClick: (video: VideoFile) => void;
     onFolderClick: (path: string) => void;
     isActive: boolean;
-}> = ({ item, onVideoClick, onFolderClick, isActive }) => {
+    isFocused: boolean;
+}> = ({ item, onVideoClick, onFolderClick, isActive, isFocused }) => {
     const [posterUrl, setPosterUrl] = useState<string | null>(null);
+    const itemRef = useRef<HTMLLIElement>(null);
 
+    useEffect(() => {
+        if (isFocused && itemRef.current) {
+            itemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+    }, [isFocused]);
+    
     useEffect(() => {
         let url: string | null = null;
         if (item.type === 'video' && item.data.poster) {
@@ -73,14 +81,15 @@ const PlaylistItem: React.FC<{
         };
     }, [item]);
 
-    const commonButtonClasses = "w-full text-left p-0.5 rounded-md transition-colors flex items-center space-x-1";
+    const commonButtonClasses = "w-full text-left p-0.5 rounded-md transition-colors flex items-center space-x-1 outline-none";
+    const focusClasses = isFocused ? 'ring-2 ring-brand-red ring-inset' : '';
 
     if (item.type === 'folder' || item.type === 'parent') {
         const folder = item.data;
         const Icon = item.type === 'folder' ? FolderIcon : ReturnIcon;
         return (
-             <li>
-                <button onClick={() => onFolderClick(folder.path)} className={`${commonButtonClasses} hover:bg-brand-gray`}>
+             <li ref={itemRef}>
+                <button onClick={() => onFolderClick(folder.path)} className={`${commonButtonClasses} hover:bg-brand-gray ${focusClasses}`}>
                     <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center">
                         <Icon className="w-5 h-5 text-gray-400" />
                     </div>
@@ -94,10 +103,10 @@ const PlaylistItem: React.FC<{
 
     const video = item.data;
     return (
-        <li>
+        <li ref={itemRef}>
             <button
                 onClick={() => onVideoClick(video)}
-                className={`${commonButtonClasses} ${isActive ? 'player-active-bg-light' : 'hover:bg-brand-gray'}`}
+                className={`${commonButtonClasses} ${isActive ? 'player-active-bg-light' : 'hover:bg-brand-gray'} ${focusClasses}`}
             >
                 <div className="w-28 h-[63px] flex-shrink-0 bg-brand-gray rounded-md overflow-hidden relative">
                     {posterUrl ? (
@@ -140,6 +149,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
   const [activeTrackLabel, setActiveTrackLabel] = useState<string | null>(null);
   const [playlistPath, setPlaylistPath] = useState(video.parentPath);
   const [isVisible, setIsVisible] = useState(false);
+  const [focusedPlaylistItemIndex, setFocusedPlaylistItemIndex] = useState(-1);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerContainerRef = useRef<HTMLDivElement>(null);
@@ -147,29 +157,30 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
   const clickTimeoutRef = useRef<number | null>(null);
   const subtitleMenuRef = useRef<HTMLDivElement>(null);
   const subtitleInputRef = useRef<HTMLInputElement>(null);
+  const playlistRef = useRef<HTMLUListElement>(null);
   const db = useMemo(() => new MediaDB(), []);
 
   const isPipSupported = useMemo(() => 'pictureInPictureEnabled' in document && document.pictureInPictureEnabled, []);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
-    // Wait for fade-out animation before calling parent close handler
-    setTimeout(() => {
-      on_close();
-    }, 400);
+    setTimeout(() => on_close(), 400);
   }, [on_close]);
 
-  // Player visible animation
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 50);
     return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    if (!playlist) { // Only reset playlist path if not in a remix playlist
+    if (!playlist) {
       setPlaylistPath(video.parentPath);
     }
   }, [video, playlist]);
+  
+  useEffect(() => {
+      setFocusedPlaylistItemIndex(-1);
+  }, [isPlaylistOpen, playlistPath]);
 
   const { playlistItems, playlistTitle } = useMemo(() => {
     if (playlist) {
@@ -180,7 +191,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
 
     const videosInPath: PlaylistItemData[] = [];
-    const subfolders = new Map<string, string>(); // path -> name
+    const subfolders = new Map<string, string>();
 
     for (const v of allVideos) {
         if (v.parentPath === playlistPath) {
@@ -188,9 +199,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         } else if (v.parentPath.startsWith(playlistPath ? `${playlistPath}/` : '')) {
             const nextSegment = v.parentPath.substring(playlistPath ? `${playlistPath}/`.length : 0).split('/')[0];
             const folderPath = playlistPath ? `${playlistPath}/${nextSegment}` : nextSegment;
-            if (nextSegment) {
-                subfolders.set(folderPath, nextSegment);
-            }
+            if (nextSegment) subfolders.set(folderPath, nextSegment);
         }
     }
 
@@ -235,21 +244,15 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   }, [currentVideoIndex, playlist, allVideos, video, handleSwitchVideo]);
 
-  // Load video source and subtitles
   useEffect(() => {
     let videoObjectUrl: string | null = null;
     let subtitleObjectUrls: string[] = [];
-
     const loadMedia = async () => {
       try {
-        setError(null);
-        setVideoSrc(null);
-        setSubtitles([]);
-        
+        setError(null); setVideoSrc(null); setSubtitles([]);
         const videoFile = await getFileWithPermission(video.fileHandle);
         videoObjectUrl = URL.createObjectURL(videoFile);
         setVideoSrc(videoObjectUrl);
-
         const subtitlePromises = video.subtitles.map(async (sub) => {
           try {
             const subFile = await getFileWithPermission(sub.fileHandle);
@@ -259,24 +262,16 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
             const url = URL.createObjectURL(blob);
             subtitleObjectUrls.push(url);
             return { src: url, lang: sub.lang, label: sub.name };
-          } catch (e) {
-            console.error("Error loading subtitle:", sub.name, e);
-            return null;
-          }
+          } catch (e) { return null; }
         });
-
         const resolvedSubtitles = (await Promise.all(subtitlePromises)).filter(Boolean) as { src: string; lang: string; label: string }[];
         setSubtitles(resolvedSubtitles);
-
       } catch (err: any) {
-        console.error("Error loading media:", err);
         setError(`Failed to load video: ${err.message}. Please check file permissions.`);
         setIsPlaying(false);
       }
     };
-
     loadMedia();
-
     return () => {
       if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
       subtitleObjectUrls.forEach(url => URL.revokeObjectURL(url));
@@ -292,7 +287,6 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   };
   
-  // Video event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setProgress(videoRef.current.currentTime);
@@ -303,25 +297,15 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
   const handleDurationChange = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
-      if (video.playbackPosition) {
-        videoRef.current.currentTime = video.playbackPosition;
-      }
+      if (video.playbackPosition) videoRef.current.currentTime = video.playbackPosition;
     }
   };
 
   const togglePlay = useCallback(() => {
-    if (videoRef.current) {
-      if (videoRef.current.paused) {
-        videoRef.current.play();
-        setIsPlaying(true);
-      } else {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-    }
+    if (!videoRef.current) return;
+    videoRef.current.paused ? videoRef.current.play() : videoRef.current.pause();
   }, []);
   
-  // Controls visibility logic
   const showControls = useCallback(() => {
     setIsControlsVisible(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -334,20 +318,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
 
   useEffect(() => {
     showControls();
-    return () => {
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    };
+    return () => { if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current); };
   }, [showControls, isPlaying]);
-
-  const handleMouseMove = () => {
-    showControls();
-  };
-  
-  const handleMouseLeave = () => {
-    if (isPlaying) {
-      setIsControlsVisible(false);
-    }
-  }
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -357,7 +329,10 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   }, []);
   
-  const handleClick = useCallback(() => {
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.player-bottom-bar, .player-top-bar')) {
+        return;
+    }
     if (clickTimeoutRef.current) {
       clearTimeout(clickTimeoutRef.current);
       clickTimeoutRef.current = null;
@@ -370,16 +345,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
   }, [togglePlay, toggleFullscreen]);
   
-  useEffect(() => {
-      return () => {
-          if (clickTimeoutRef.current) {
-              clearTimeout(clickTimeoutRef.current);
-          }
-      }
-  }, []);
+  useEffect(() => () => { if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current) }, []);
 
-
-  // Seeking logic
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (videoRef.current) {
       const time = Number(e.target.value);
@@ -403,8 +370,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
       videoRef.current.muted = newMutedState;
       setIsMuted(newMutedState);
       if (!newMutedState && volume === 0) {
-        setVolume(0.5);
-        videoRef.current.volume = 0.5;
+        setVolume(0.5); videoRef.current.volume = 0.5;
       }
     }
   }, [isMuted, volume]);
@@ -412,17 +378,11 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
   const togglePip = async () => {
     if (!videoRef.current) return;
     try {
-        if (document.pictureInPictureElement) {
-            await document.exitPictureInPicture();
-        } else {
-            await videoRef.current.requestPictureInPicture();
-        }
-    } catch (error) {
-        console.error("PiP error:", error);
-    }
+        if (document.pictureInPictureElement) await document.exitPictureInPicture();
+        else await videoRef.current.requestPictureInPicture();
+    } catch (error) { console.error("PiP error:", error); }
   };
   
-  // Subtitle logic
   const handleSubtitleChange = (label: string | null) => {
     if (videoRef.current) {
       const tracks = videoRef.current.textTracks;
@@ -438,98 +398,69 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     const file = e.target.files?.[0];
     if (file && videoRef.current) {
         const url = URL.createObjectURL(file);
-        // Create a new track element and append it
         const track = document.createElement('track');
-        track.src = url;
-        track.kind = 'subtitles';
-        track.srclang = 'custom';
-        track.label = file.name;
-        track.default = true;
+        track.src = url; track.kind = 'subtitles'; track.srclang = 'custom'; track.label = file.name; track.default = true;
         videoRef.current.appendChild(track);
-        
-        // After appending, we need to re-evaluate tracks
         setTimeout(() => {
             const newTracks = videoRef.current?.textTracks;
             if (newTracks) {
-                for(let i = 0; i < newTracks.length; i++) {
-                    newTracks[i].mode = 'hidden';
-                }
+                for(let i = 0; i < newTracks.length; i++) newTracks[i].mode = 'hidden';
                 const newTrack = Array.from(newTracks).find(t => t.label === file.name);
-                if (newTrack) {
-                    newTrack.mode = 'showing';
-                    setActiveTrackLabel(file.name);
-                }
+                if (newTrack) { newTrack.mode = 'showing'; setActiveTrackLabel(file.name); }
             }
         }, 100);
         setIsSubtitleMenuOpen(false);
     }
   };
   
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore shortcuts if an input is focused
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      switch(e.key) {
-        case ' ':
+      if (isPlaylistOpen) {
           e.preventDefault();
-          togglePlay();
-          break;
-        case 'f':
-          e.preventDefault();
-          toggleFullscreen();
-          break;
-        case 'm':
-          e.preventDefault();
-          toggleMute();
-          break;
-        case 'ArrowRight':
-          e.preventDefault();
-          if (videoRef.current) videoRef.current.currentTime += 10;
-          break;
-        case 'ArrowLeft':
-          e.preventDefault();
-          if (videoRef.current) videoRef.current.currentTime -= 10;
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          handleSkip('prev');
-          break;
-        case 'ArrowDown':
-          e.preventDefault();
-          handleSkip('next');
-          break;
-        case 'Escape':
-          e.preventDefault();
-          if (document.fullscreenElement) {
-            document.exitFullscreen();
-          } else {
-            handleClose();
+          switch (e.key) {
+            case 'ArrowUp':
+              setFocusedPlaylistItemIndex(prev => (prev <= 0 ? playlistItems.length - 1 : prev - 1));
+              break;
+            case 'ArrowDown':
+              setFocusedPlaylistItemIndex(prev => (prev >= playlistItems.length - 1 ? 0 : prev + 1));
+              break;
+            case 'Enter':
+              if (focusedPlaylistItemIndex > -1 && playlistItems[focusedPlaylistItemIndex]) {
+                const item = playlistItems[focusedPlaylistItemIndex];
+                if (item.type === 'video') handleSwitchVideo(item.data);
+                else setPlaylistPath(item.data.path);
+              }
+              break;
+            case 'Escape':
+              setIsPlaylistOpen(false);
+              break;
           }
-          break;
-        case 'n':
-            e.preventDefault();
-            handleSkip('next');
-            break;
-        case 'p':
-            e.preventDefault();
-            handleSkip('prev');
-            break;
+          return;
+      }
+      
+      switch(e.key) {
+        case ' ': e.preventDefault(); togglePlay(); break;
+        case 'f': e.preventDefault(); toggleFullscreen(); break;
+        case 'm': e.preventDefault(); toggleMute(); break;
+        case 'ArrowRight': e.preventDefault(); if (videoRef.current) videoRef.current.currentTime += 10; break;
+        case 'ArrowLeft': e.preventDefault(); if (videoRef.current) videoRef.current.currentTime -= 10; break;
+        case 'Escape': e.preventDefault(); if (document.fullscreenElement) document.exitFullscreen(); else handleClose(); break;
+        case 'n': e.preventDefault(); handleSkip('next'); break;
+        case 'p': e.preventDefault(); handleSkip('prev'); break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, toggleMute, toggleFullscreen, handleClose, handleSkip]);
+  }, [togglePlay, toggleMute, toggleFullscreen, handleClose, handleSkip, isPlaylistOpen, playlistItems, focusedPlaylistItemIndex, handleSwitchVideo]);
 
-  // Fullscreen change listener
   useEffect(() => {
     const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
   
-  // PIP change listener
   useEffect(() => {
       const videoEl = videoRef.current;
       if (!videoEl) return;
@@ -542,7 +473,6 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
       };
   }, []);
   
-  // Close menu on click outside
   useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
           if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target as Node)) {
@@ -557,8 +487,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     <div 
         ref={playerContainerRef}
         className={`fixed inset-0 bg-black z-50 flex items-center justify-center player-container ${isVisible ? 'is-visible' : ''}`}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
+        onMouseMove={showControls}
+        onMouseLeave={() => isPlaying && setIsControlsVisible(false)}
     >
       <div className="absolute inset-0 w-full h-full" onClick={handleClick}>
         {videoSrc && !error ? (
@@ -583,9 +513,9 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         )}
       </div>
 
-      <div className={`absolute inset-0 player-controls ${isControlsVisible ? '' : 'player-controls-hidden'}`}>
+      <div className={`absolute inset-0 player-controls pointer-events-none ${isControlsVisible ? '' : 'player-controls-hidden'}`}>
         {/* Top bar */}
-        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4 flex justify-between items-center player-top-bar">
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4 flex justify-between items-center player-top-bar pointer-events-auto">
           <div className="flex flex-col">
             <h2 className="text-xl font-bold text-white">{video.name.replace(/\.[^/.]+$/, "")}</h2>
             <p className="text-sm text-gray-300">{video.parentPath}</p>
@@ -596,8 +526,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         </div>
 
         {/* Bottom bar */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 player-bottom-bar">
-           {/* Seek bar */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 player-bottom-bar pointer-events-auto">
           <div className="flex items-center space-x-4 mb-2">
             <span className="text-white text-sm font-mono">{formatDuration(progress)}</span>
             <div className="relative w-full h-4 flex items-center group">
@@ -611,14 +540,13 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
                     max={duration || 0}
                     value={progress || 0}
                     onChange={handleSeek}
-                    className="w-full h-full bg-transparent appearance-none cursor-pointer range-thumb"
+                    className="w-full bg-transparent appearance-none cursor-pointer range-thumb"
                 />
             </div>
             <span className="text-white text-sm font-mono">{formatDuration(duration)}</span>
           </div>
         
           <div className="flex justify-between items-center">
-            {/* Left controls */}
             <div className="flex items-center space-x-4">
               <button onClick={() => handleSkip('prev')} className="player-themed-button" disabled={currentVideoIndex === -1}><SkipPreviousIcon className="w-6 h-6"/></button>
               <button onClick={togglePlay} className="player-themed-button">{isPlaying ? <PauseIcon className="w-8 h-8"/> : <PlayIcon className="w-8 h-8"/>}</button>
@@ -633,18 +561,15 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
                     </div>
                     <input
                       type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
+                      min="0" max="1" step="0.05"
                       value={isMuted ? 0 : volume}
                       onChange={handleVolumeChange}
-                      className="w-full h-full bg-transparent appearance-none cursor-pointer range-thumb-sm"
+                      className="w-full bg-transparent appearance-none cursor-pointer range-thumb-sm"
                     />
                 </div>
               </div>
             </div>
 
-            {/* Right controls */}
             <div className="flex items-center space-x-4">
                {isPipSupported && (
                  <button onClick={togglePip} className={`player-themed-button ${isPip ? 'player-active-button': ''}`} title={isPip ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture"}>
@@ -654,7 +579,7 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
                <button onClick={() => setIsPlaylistOpen(p => !p)} className={`player-themed-button ${isPlaylistOpen ? 'player-active-button' : ''}`} title="Playlist">
                 <PlaylistIcon className="w-6 h-6"/>
                </button>
-               <div className="relative" ref={subtitleMenuRef}>
+               <div className="relative flex items-center" ref={subtitleMenuRef}>
                  <button onClick={() => setIsSubtitleMenuOpen(p => !p)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`} title="Subtitles">
                    <CCIcon className="w-6 h-6"/>
                  </button>
@@ -680,23 +605,23 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         </div>
       </div>
       
-      {/* Playlist Panel */}
       <div className="absolute bottom-24 right-4 w-96 max-w-[90vw] bg-black/70 backdrop-blur-md rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isPlaylistOpen ? '60vh' : '0' }}>
-          <div className="p-2">
-              <div className="flex justify-between items-center mb-2 px-2">
+          <div className="p-2 flex flex-col h-full">
+              <div className="flex justify-between items-center mb-2 px-2 flex-shrink-0">
                 <h3 className="font-bold text-lg">{playlistTitle}</h3>
                 <button onClick={() => setIsPlaylistOpen(false)} className="player-themed-button">
                     <CloseIcon className="w-6 h-6"/>
                 </button>
               </div>
-              <ul className="space-y-1 p-2 overflow-y-auto" style={{ maxHeight: 'calc(60vh - 4rem)' }}>
-                  {playlistItems.map((item) => (
+              <ul ref={playlistRef} className="space-y-1 p-2 overflow-y-auto flex-grow" style={{ maxHeight: 'calc(60vh - 4rem)' }}>
+                  {playlistItems.map((item, index) => (
                       <PlaylistItem
                           key={item.type === 'video' ? item.data.fullPath : item.data.path}
                           item={item}
                           onVideoClick={handleSwitchVideo}
                           onFolderClick={setPlaylistPath}
                           isActive={item.type === 'video' && item.data.fullPath === video.fullPath}
+                          isFocused={index === focusedPlaylistItemIndex}
                       />
                   ))}
               </ul>

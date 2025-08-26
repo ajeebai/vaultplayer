@@ -34,21 +34,33 @@
         transition: background-color 0.3s ease;
       }
 
+      kbd {
+        padding: 0.1em 0.4em;
+        border-radius: 3px;
+        border: 1px solid #666;
+        color: var(--text-primary);
+        background-color: var(--brand-light-gray);
+        box-shadow: 0 1px 0 #333;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
       /* VELVET THEME STYLES - More sensual and visually exciting */
       [data-theme="velvet"] {
         --font-sans: 'Lora', serif;
-        --brand-red: #991B1B; /* Deep Crimson */
-        --brand-red-glow: rgba(153, 27, 27, 0.5);
-        --brand-black: #1c1917; /* stone-900 */
-        --brand-gray: #292524; /* stone-800 */
-        --brand-light-gray: #44403C; /* stone-700 */
-        --text-primary: #f5f5f4; /* stone-100 */
-        --text-secondary: #a8a29e; /* stone-400 */
-        --background-color: #1c1917;
+        --brand-red: #B91C1C; /* A richer, deeper crimson */
+        --brand-red-glow: rgba(185, 28, 28, 0.6);
+        --brand-black: #171717; /* Near-black for deep contrast */
+        --brand-gray: #262626; /* Dark slate gray */
+        --brand-light-gray: #404040; /* Lighter slate */
+        --text-primary: #f5f5f5; /* Off-white for warmth */
+        --text-secondary: #a3a3a3; /* Muted gray for secondary text */
+        --background-color: #171717;
       }
 
       html[data-theme="velvet"] {
-        background-image: radial-gradient(circle at top, #292524 0%, #1c1917 80%);
+        /* A more dramatic gradient, from a deep charcoal to near-black */
+        background-image: radial-gradient(ellipse at center top, #262626 0%, #171717 70%);
         background-attachment: fixed;
       }
 
@@ -93,6 +105,12 @@
        }
       [data-theme="dreamscape"] ::-webkit-scrollbar-thumb { background-color: var(--brand-light-gray) !important; border-radius: 10px !important; }
       [data-theme="dreamscape"] .footer-glow { color: var(--brand-red); -webkit-text-stroke: 0; text-shadow: 0 0 45px var(--brand-red-glow), 0 0 20px var(--brand-red); }
+      [data-theme="dreamscape"] kbd {
+        color: var(--text-primary);
+        background-color: var(--brand-light-gray);
+        border-color: #ccc;
+        box-shadow: 0 1px 0 #bbb;
+      }
       
       /* FOOTER */
       .footer-glow {
@@ -121,7 +139,6 @@
       }
       .player-controls-hidden {
         opacity: 0;
-        pointer-events: none;
       }
       .player-controls-hidden .player-top-bar {
         transform: translateY(-100%);
@@ -152,26 +169,80 @@
         background-color: color-mix(in srgb, var(--player-accent-color, var(--brand-red)) 80%, transparent);
       }
 
-      /* PLAYER SLIDER STYLES - Consistent Across Themes */
-      .range-thumb::-webkit-slider-thumb, .range-thumb-sm::-webkit-slider-thumb {
+      /* PLAYER SLIDER STYLES - Robust, Consistent, Cross-Browser */
+      input[type="range"] {
         -webkit-appearance: none;
         appearance: none;
-        background: var(--player-accent-color, var(--brand-red));
+        background: transparent;
         cursor: pointer;
-        transition: background 0.2s ease;
+        width: 100%;
+      }
+      input[type="range"]:focus {
+        outline: none;
+      }
+
+      /* Common Thumb Styles */
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; /* Must be here */
+        appearance: none;
+        background-color: var(--player-accent-color, var(--brand-red));
         border-radius: 50%;
         border: none;
         box-shadow: 0 0 5px var(--brand-red-glow), 0 0 0 1px rgba(0,0,0,0.2);
+        transition: transform 0.2s ease;
+      }
+      input[type="range"]::-moz-range-thumb {
+        background-color: var(--player-accent-color, var(--brand-red));
+        border-radius: 50%;
+        border: none;
+        box-shadow: 0 0 5px var(--brand-red-glow), 0 0 0 1px rgba(0,0,0,0.2);
+        transition: transform 0.2s ease;
+      }
+
+      /* --- Seek Bar --- */
+      .range-thumb {
+        height: 16px; /* Match thumb height for centering container */
+      }
+      .range-thumb::-webkit-slider-runnable-track {
+        height: 6px;
       }
       .range-thumb::-webkit-slider-thumb {
-        width: 16px;
         height: 16px;
-        margin-top: -5px; /* (Track height 6px - Thumb height 16px) / 2 */
+        width: 16px;
+        margin-top: -5px; /* (track_height - thumb_height) / 2 */
+      }
+      .range-thumb::-moz-range-track {
+        height: 6px;
+      }
+      .range-thumb::-moz-range-thumb {
+        height: 16px;
+        width: 16px;
+      }
+
+      /* --- Volume Bar --- */
+      .range-thumb-sm {
+        height: 12px; /* Match thumb height for centering container */
+      }
+      .range-thumb-sm::-webkit-slider-runnable-track {
+        height: 4px;
       }
       .range-thumb-sm::-webkit-slider-thumb {
-        width: 12px;
         height: 12px;
-        margin-top: -4px; /* (Track height 4px - Thumb height 12px) / 2 */
+        width: 12px;
+        margin-top: -4px; /* (track_height - thumb_height) / 2 */
+      }
+      .range-thumb-sm::-moz-range-track {
+        height: 4px;
+      }
+      .range-thumb-sm::-moz-range-thumb {
+        height: 12px;
+        width: 12px;
+      }
+
+      /* Hover effect */
+      input[type=range]:hover::-webkit-slider-thumb,
+      input[type=range]:hover::-moz-range-thumb {
+        transform: scale(1.1);
       }
     </style>
     <script>
