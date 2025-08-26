@@ -1,3 +1,4 @@
+
 import React, { useMemo } from 'react';
 import { Hero } from './Hero';
 import { Rail } from './Rail';
@@ -29,6 +30,7 @@ interface LibraryProps {
   isFavoritesView: boolean;
   onPrioritizeMedia: (media: VideoFile) => void;
   showHidden: boolean;
+  sortOrder: string;
   onClearContinueWatching?: () => void;
   onPlayRemix: (videos: VideoFile[]) => void;
 }
@@ -53,15 +55,33 @@ export const Library: React.FC<LibraryProps> = ({
   hasLibraries,
   onPrioritizeMedia,
   showHidden,
+  sortOrder,
   onClearContinueWatching,
   onPlayRemix,
 }) => {
+  const sortedMedia = useMemo(() => {
+    const sorted = [...media];
+    switch (sortOrder) {
+        case 'date-desc':
+            sorted.sort((a, b) => (b.dateAdded || 0) - (b.dateAdded || 0));
+            break;
+        case 'date-asc':
+            sorted.sort((a, b) => (a.dateAdded || 0) - (b.dateAdded || 0));
+            break;
+        case 'name-asc':
+        default:
+            sorted.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+            break;
+    }
+    return sorted;
+  }, [media, sortOrder]);
 
   const displayedMedia = useMemo(() => {
-    // Unplayable media is handled at the VideoTile level, which shows an 'unsupported' state.
-    // Here we only apply the user's visibility settings for hidden files.
-    return showHidden ? media : media.filter(v => !v.isHidden);
-  }, [media, showHidden]);
+    if (showHidden) {
+      return sortedMedia;
+    }
+    return sortedMedia.filter(v => !v.isHidden && v.isPlayable !== false);
+  }, [sortedMedia, showHidden]);
 
   const searchFilteredMedia = useMemo(() => {
     if (!searchQuery) return displayedMedia;
@@ -79,36 +99,21 @@ export const Library: React.FC<LibraryProps> = ({
     return findNodeByPath(categoryTree, selectedCategoryPath);
   }, [categoryTree, selectedCategoryPath]);
   
+  const showHero = !searchQuery && !selectedCategoryPath && !selectedTag && !isFavoritesView;
+
   const heroMedia = useMemo(() => {
-    if (displayedMedia.length === 0) return null;
+    if (!showHero || displayedMedia.length === 0) return null;
 
-    let sourcePool: VideoFile[] = displayedMedia; // Default to all displayed media
-
-    if (currentCategoryNode) {
-        const nodeMediaPaths = new Set(getAllMediaFromNode(currentCategoryNode).map(m => m.fullPath));
-        sourcePool = displayedMedia.filter(m => nodeMediaPaths.has(m.fullPath));
-    } else if (isFavoritesView) {
-        sourcePool = displayedMedia.filter(v => v.isFavorite);
-    } else if (selectedTag) {
-        sourcePool = displayedMedia.filter(v => v.tags?.includes(selectedTag));
-    } else if (searchQuery) {
-        sourcePool = searchFilteredMedia;
+    const withPosters = displayedMedia.filter(v => v.poster && v.isPlayable !== false);
+    if (withPosters.length > 0) {
+        return withPosters[Math.floor(Math.random() * withPosters.length)];
     }
-
-    const withPosters = sourcePool.filter(v => v.poster && v.isPlayable !== false);
-    const selectionPool = withPosters.length > 0 ? withPosters : sourcePool.filter(v => v.isPlayable !== false);
-
-    if (selectionPool.length > 0) {
-        return selectionPool[Math.floor(Math.random() * selectionPool.length)];
-    }
-    
-    // Final fallback to any displayed media if current view is empty for some reason
-    return displayedMedia.length > 0 ? displayedMedia[Math.floor(Math.random() * displayedMedia.length)] : null;
-  }, [displayedMedia, currentCategoryNode, selectedTag, isFavoritesView, searchQuery, searchFilteredMedia]);
+    const playable = displayedMedia.filter(v => v.isPlayable !== false);
+    return playable.length > 0 ? playable[Math.floor(Math.random() * playable.length)] : null;
+  }, [displayedMedia, showHero]);
 
   const getMediaForNode = (node: CategoryNode): VideoFile[] => {
     const allNodeMedia = getAllMediaFromNode(node);
-    // The order is preserved from the main media array, which is stable.
     return displayedMedia.filter(m => allNodeMedia.some(nm => nm.fullPath === m.fullPath));
   };
 
@@ -129,6 +134,7 @@ export const Library: React.FC<LibraryProps> = ({
   const renderCategorySections = (nodes: CategoryNode[], forceRail: boolean = false) => {
     return nodes.flatMap((node) => {
       const mediaForNode = getMediaForNode(node);
+      const allNodeMedia = getAllMediaFromNode(node);
       if (mediaForNode.length === 0) return [];
 
       // If a category has no sub-folders and we are NOT forcing a rail, display its contents in a grid.
@@ -143,8 +149,8 @@ export const Library: React.FC<LibraryProps> = ({
                 {node.name}
               </h2>
               <button
-                onClick={() => onPlayRemix(mediaForNode)}
-                disabled={mediaForNode.length === 0}
+                onClick={() => onPlayRemix(allNodeMedia)}
+                disabled={allNodeMedia.length === 0}
                 className="text-gray-400 hover:text-brand-red transition-colors disabled:text-gray-600 disabled:cursor-not-allowed"
                 title={`Remix ${node.name}`}
               >
@@ -179,26 +185,30 @@ export const Library: React.FC<LibraryProps> = ({
         onSelectCategory={onSelectCategory}
         onUnsupportedMedia={onUnsupportedMedia}
         onPrioritizeMedia={onPrioritizeMedia}
-        allCategoryVideos={mediaForNode}
+        allCategoryVideos={allNodeMedia}
         onPlayRemix={onPlayRemix}
       />];
     });
   }
 
   const renderHomeRails = () => {
-    const favorites = displayedMedia.filter(v => v.isFavorite);
-    const continueWatching = displayedMedia
+    const allFavorites = displayedMedia.filter(v => v.isFavorite);
+    const favoritesForDisplay = allFavorites.slice(0, 20);
+
+    const allContinueWatching = displayedMedia
       .filter(v => v.playbackPosition && v.duration && (v.playbackPosition / v.duration) < 0.95)
-      .sort((a, b) => (b.lastWatched?.getTime() || 0) - (a.lastWatched?.getTime() || 0))
-      .slice(0, 20);
-    const rootFiles = displayedMedia.filter(v => v.parentPath === '');
+      .sort((a, b) => (b.lastWatched?.getTime() || 0) - (a.lastWatched?.getTime() || 0));
+    const continueWatchingForDisplay = allContinueWatching.slice(0, 20);
+      
+    const allRootFiles = displayedMedia.filter(v => v.parentPath === '');
+    const rootFilesForDisplay = allRootFiles.slice(0, 20);
 
     return (
       <div className="space-y-12">
-        {continueWatching.length > 0 && (
+        {allContinueWatching.length > 0 && (
           <Rail
             title="Continue Watching"
-            videos={continueWatching}
+            videos={continueWatchingForDisplay}
             onSelectVideo={onSelectVideo}
             onToggleFavorite={onToggleFavorite}
             onToggleHidden={onToggleHidden}
@@ -207,14 +217,14 @@ export const Library: React.FC<LibraryProps> = ({
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
             onClear={onClearContinueWatching}
-            allCategoryVideos={continueWatching}
+            allCategoryVideos={allContinueWatching}
             onPlayRemix={onPlayRemix}
           />
         )}
-        {favorites.length > 0 && (
+        {allFavorites.length > 0 && (
           <Rail
             title="Favorites"
-            videos={favorites}
+            videos={favoritesForDisplay}
             onSelectVideo={onSelectVideo}
             onToggleFavorite={onToggleFavorite}
             onToggleHidden={onToggleHidden}
@@ -222,14 +232,14 @@ export const Library: React.FC<LibraryProps> = ({
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
-            allCategoryVideos={favorites}
+            allCategoryVideos={allFavorites}
             onPlayRemix={onPlayRemix}
           />
         )}
-        {rootFiles.length > 0 && (
+        {allRootFiles.length > 0 && (
           <Rail
             title="Files"
-            videos={rootFiles}
+            videos={rootFilesForDisplay}
             onSelectVideo={onSelectVideo}
             onToggleFavorite={onToggleFavorite}
             onToggleHidden={onToggleHidden}
@@ -237,7 +247,7 @@ export const Library: React.FC<LibraryProps> = ({
             onSelectCategory={onSelectCategory}
             onUnsupportedMedia={onUnsupportedMedia}
             onPrioritizeMedia={onPrioritizeMedia}
-            allCategoryVideos={rootFiles}
+            allCategoryVideos={allRootFiles}
             onPlayRemix={onPlayRemix}
           />
         )}
@@ -259,6 +269,7 @@ export const Library: React.FC<LibraryProps> = ({
     
     if (currentCategoryNode) {
       const mediaForNode = getMediaForNode(currentCategoryNode);
+      const allMediaForNode = getAllMediaFromNode(currentCategoryNode);
       // If the currently selected category is a LEAF node, display a single grid of its content.
       if (currentCategoryNode.children.length === 0) {
         return (
@@ -268,8 +279,8 @@ export const Library: React.FC<LibraryProps> = ({
               <div className="flex items-center gap-2">
                 <h2 className="text-xl md:text-2xl font-bold text-white">{currentCategoryNode.name}</h2>
                 <button
-                  onClick={() => onPlayRemix(mediaForNode)}
-                  disabled={mediaForNode.length === 0}
+                  onClick={() => onPlayRemix(allMediaForNode)}
+                  disabled={allMediaForNode.length === 0}
                   className="text-gray-400 hover:text-brand-red transition-colors disabled:text-gray-600 disabled:cursor-not-allowed"
                   title={`Remix ${currentCategoryNode.name}`}
                 >

@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Library } from './components/Library';
 import { Player } from './components/Player';
@@ -72,7 +70,7 @@ const ManageLibrariesModal: React.FC<{
                   <button onClick={() => onSwitch(lib.id)} className="text-gray-300 hover:text-white text-sm">Switch To</button>
                 )}
                 <button onClick={() => handleRename(lib)} className="text-gray-300 hover:text-white text-sm">Rename</button>
-                <button onClick={() => window.confirm(`Are you sure you want to delete "${lib.name}"? All its data will be removed.`) && onDelete(lib.id)} className="text-red-500 hover:text-red-400 text-sm">Delete</button>
+                <button onClick={() => onDelete(lib.id)} className="text-red-500 hover:text-red-400 text-sm">Delete</button>
               </div>
             </div>
           ))}
@@ -173,6 +171,9 @@ const App: React.FC = () => {
   const [showHidden, setShowHidden] = useState(() => {
     return localStorage.getItem('vault-showHidden') === 'true';
   });
+  const [sortOrder, setSortOrder] = useState(() => {
+    return localStorage.getItem('vault-sortOrder') || 'name-asc';
+  });
 
   const db = useMemo(() => new MediaDB(), []);
   
@@ -189,6 +190,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('vault-showHidden', String(showHidden));
   }, [showHidden]);
+
+  useEffect(() => {
+    localStorage.setItem('vault-sortOrder', sortOrder);
+  }, [sortOrder]);
 
   const handleToggleTheme = () => {
     setTheme(current => {
@@ -465,179 +470,166 @@ const App: React.FC = () => {
     startScan(library.handle, library.id, existingMedia);
   }, [db, libraries, startScan, activeLibrary, appState.media]);
 
-  const handleSearch = (query: string) => {
-    setAppState(prev => ({ ...prev, searchQuery: query }));
-    if (query) {
-      setSelectedCategoryPath(null);
-      setIsFavoritesView(false);
-      setSelectedTag(null);
-    }
+  const updateMediaItem = (updatedVideo: VideoFile) => {
+    setAppState(prev => ({
+      ...prev,
+      media: prev.media.map(v => v.fullPath === updatedVideo.fullPath ? updatedVideo : v),
+    }));
   };
 
-  const handleToggleFavoritesView = () => {
-    setSelectedCategoryPath(null);
-    setSelectedTag(null);
-    setIsFavoritesView(prev => !prev);
-  };
+  const handleToggleFavorite = useCallback(async (fullPath: string) => {
+    if (!activeLibrary) return;
+    const updated = await db.toggleFavorite(activeLibrary.id, fullPath);
+    if (updated) updateMediaItem(updated);
+  }, [db, activeLibrary]);
 
-  const handleGoHome = () => {
-    setSelectedCategoryPath(null);
-    setIsFavoritesView(false);
-    setSelectedTag(null);
-  }
+  const handleToggleHidden = useCallback(async (fullPath: string) => {
+    if (!activeLibrary) return;
+    const updated = await db.toggleHidden(activeLibrary.id, fullPath);
+    if (updated) updateMediaItem(updated);
+  }, [db, activeLibrary]);
 
-  const handleSelectCategory = (path: string | null) => {
-    setSelectedCategoryPath(path);
-    setIsFavoritesView(false);
-    setSelectedTag(null);
-  }
+  const handleUpdateTags = useCallback(async (fullPath: string, tags: string[]) => {
+    if (!activeLibrary) return;
+    const updated = await db.updateTags(activeLibrary.id, fullPath, tags);
+    if (updated) updateMediaItem(updated);
+  }, [db, activeLibrary]);
   
-  const handleSelectTag = (tag: string | null) => {
-    setAppState(prev => ({ ...prev, searchQuery: '' }));
-    setSelectedCategoryPath(null);
-    setIsFavoritesView(false);
-    setSelectedTag(tag);
-  }
-
-  const handleToggleFavorite = async (fullPath: string) => {
-    if (!activeLibrary) return;
-    const updatedMedia = await db.toggleFavorite(activeLibrary.id, fullPath);
-    if (updatedMedia) {
-      setAppState(prev => ({
-        ...prev,
-        media: prev.media.map(v => v.fullPath === fullPath ? updatedMedia : v),
-      }));
-    }
-  };
-
-  const handleToggleHidden = async (fullPath: string) => {
-    if (!activeLibrary) return;
-    const updatedMedia = await db.toggleHidden(activeLibrary.id, fullPath);
-    if (updatedMedia) {
-      setAppState(prev => ({
-        ...prev,
-        media: prev.media.map(v => v.fullPath === fullPath ? updatedMedia : v),
-      }));
-    }
-  };
-
-  const handleUpdateTags = async (fullPath: string, tags: string[]) => {
-    if (!activeLibrary) return;
-    const updatedMedia = await db.updateTags(activeLibrary.id, fullPath, tags);
-    if (updatedMedia) {
-      setAppState(prev => ({
-        ...prev,
-        media: prev.media.map(v => v.fullPath === fullPath ? updatedMedia : v),
-      }));
-    }
-  };
-
   const handleClearContinueWatching = async () => {
     if (!activeLibrary) return;
-    if (window.confirm('Are you sure you want to clear your "Continue Watching" history? This cannot be undone.')) {
-        const clearedPaths = await db.clearContinueWatching(activeLibrary.id);
-        const clearedPathsSet = new Set(clearedPaths);
-        setAppState(prev => ({
-            ...prev,
-            media: prev.media.map(m => {
-                if (clearedPathsSet.has(m.fullPath)) {
-                    const { playbackPosition, lastWatched, ...rest } = m;
-                    return rest as VideoFile;
-                }
-                return m;
-            })
-        }));
-    }
+    const updatedPaths = await db.clearContinueWatching(activeLibrary.id);
+    setAppState(prev => ({
+        ...prev,
+        media: prev.media.map(v => {
+            if (updatedPaths.includes(v.fullPath)) {
+                const { playbackPosition, lastWatched, ...rest } = v;
+                return rest;
+            }
+            return v;
+        }),
+    }));
   };
   
-  const renderContent = () => {
+  const handleGoHome = () => {
+    setAppState(prev => ({ ...prev, searchQuery: '' }));
+    setIsFavoritesView(false);
+    setSelectedCategoryPath(null);
+    setSelectedTag(null);
+  };
+  
+  const handleSelectCategory = (path: string | null) => {
+    setAppState(prev => ({ ...prev, searchQuery: '' }));
+    setIsFavoritesView(false);
+    setSelectedTag(null);
+    setSelectedCategoryPath(path);
+  };
+
+  const handleSelectTag = (tag: string) => {
+    setAppState(prev => ({ ...prev, searchQuery: '' }));
+    setIsFavoritesView(false);
+    setSelectedCategoryPath(null);
+    setSelectedTag(tag);
+  };
+
+  const renderView = () => {
     switch (appState.view) {
-      case View.Loading:
-        return <div className="flex items-center justify-center h-screen"><div className="text-2xl animate-pulse">Initializing Vault...</div></div>;
-      case View.Welcome:
-        return <FileDropZone onDirectorySelected={handleDirectorySelected} isPickerSupported={isPickerSupported} />;
-      case View.Library:
-        return (
-          <Library
-            media={appState.media}
-            categoryTree={categoryTree}
-            onSelectVideo={handleSelectVideo}
-            isLoading={appState.isLoading}
-            progress={appState.progress}
-            progressMessage={appState.progressMessage}
-            searchQuery={appState.searchQuery}
-            isFavoritesView={isFavoritesView}
-            onToggleFavorite={handleToggleFavorite}
-            onToggleHidden={handleToggleHidden}
-            onUpdateTags={handleUpdateTags}
-            selectedCategoryPath={selectedCategoryPath}
-            onSelectCategory={handleSelectCategory}
-            selectedTag={selectedTag}
-            onUnsupportedMedia={setUnsupportedMedia}
-            onGoHome={handleGoHome}
-            hasLibraries={libraries.length > 0}
-            onPrioritizeMedia={prioritizeMedia}
-            showHidden={showHidden}
-            onClearContinueWatching={handleClearContinueWatching}
-            onPlayRemix={handlePlayRemix}
-          />
-        );
       case View.Player:
         if (appState.currentlyViewing && activeLibrary) {
           return <Player 
-              video={appState.currentlyViewing} 
-              on_close={handleClosePlayer} 
-              allVideos={appState.media}
-              activeLibrary={activeLibrary}
-              playlist={playlist}
-              onSwitchVideo={(video) => setAppState(p => ({...p, currentlyViewing: video}))}
-            />;
+            video={appState.currentlyViewing} 
+            on_close={handleClosePlayer} 
+            allVideos={appState.media}
+            activeLibrary={activeLibrary}
+            playlist={playlist}
+            onSwitchVideo={handleSelectVideo}
+          />;
         }
         return null;
-      default:
+      case View.Library:
+        return (
+          <>
+            {activeLibrary && (
+              <Header 
+                onSearch={(query) => setAppState(prev => ({ ...prev, searchQuery: query }))}
+                onDirectorySelected={handleDirectorySelected}
+                categoryTree={categoryTree}
+                onSelectCategory={handleSelectCategory}
+                allTags={allTags}
+                onSelectTag={handleSelectTag}
+                onGoHome={handleGoHome}
+                libraries={libraries}
+                activeLibrary={activeLibrary}
+                onSwitchLibrary={(id) => { handleGoHome(); handleSwitchLibrary(id); }}
+                onManageLibraries={() => setIsManageOpen(true)}
+                isPickerSupported={isPickerSupported}
+                onToggleTheme={handleToggleTheme}
+                isLoading={appState.isLoading}
+                progress={appState.progress}
+                progressMessage={appState.progressMessage}
+                showHidden={showHidden}
+                onToggleHidden={() => setShowHidden(s => !s)}
+                sortOrder={sortOrder}
+                onSortOrderChange={setSortOrder}
+                onDeleteLibrary={handleDeleteLibrary}
+              />
+            )}
+            <Library 
+              media={appState.media}
+              categoryTree={categoryTree}
+              onSelectVideo={handleSelectVideo}
+              isLoading={appState.isLoading}
+              progress={appState.progress}
+              progressMessage={appState.progressMessage}
+              searchQuery={appState.searchQuery}
+              onToggleFavorite={handleToggleFavorite}
+              onToggleHidden={handleToggleHidden}
+              onUpdateTags={handleUpdateTags}
+              selectedCategoryPath={selectedCategoryPath}
+              onSelectCategory={handleSelectCategory}
+              selectedTag={selectedTag}
+              onUnsupportedMedia={setUnsupportedMedia}
+              onGoHome={handleGoHome}
+              hasLibraries={libraries.length > 0}
+              isFavoritesView={isFavoritesView}
+              onPrioritizeMedia={prioritizeMedia}
+              showHidden={showHidden}
+              sortOrder={sortOrder}
+              onClearContinueWatching={handleClearContinueWatching}
+              onPlayRemix={handlePlayRemix}
+            />
+            <Footer />
+          </>
+        );
+      case View.Welcome:
         return <FileDropZone onDirectorySelected={handleDirectorySelected} isPickerSupported={isPickerSupported} />;
+      case View.Loading:
+      default:
+        return (
+          <div className="flex items-center justify-center h-screen">
+            <p className="text-xl animate-pulse">{appState.progressMessage || 'Loading...'}</p>
+          </div>
+        );
     }
   };
 
   return (
-    <div className="bg-brand-black min-h-screen">
-      {appState.view === View.Library && activeLibrary && (
-        <Header 
-          onSearch={handleSearch} 
-          onDirectorySelected={handleDirectorySelected}
-          categoryTree={categoryTree}
-          onSelectCategory={handleSelectCategory}
-          allTags={allTags}
-          onSelectTag={handleSelectTag}
-          onGoHome={handleGoHome}
-          libraries={libraries}
-          activeLibrary={activeLibrary}
-          onSwitchLibrary={handleSwitchLibrary}
-          onManageLibraries={() => setIsManageOpen(true)}
-          isPickerSupported={isPickerSupported}
-          onToggleTheme={handleToggleTheme}
-          isLoading={appState.isLoading && appState.media.length > 0}
-          progress={appState.progress}
-          progressMessage={appState.progressMessage}
-          showHidden={showHidden}
-          onToggleHidden={() => setShowHidden(p => !p)}
-        />
-      )}
-      <main>
-        {renderContent()}
-        {appState.view === View.Library && <Footer />}
-        {isManageOpen && <ManageLibrariesModal 
-            libraries={libraries} 
-            activeLibraryId={activeLibrary?.id || null} 
-            onSwitch={(id) => { handleSwitchLibrary(id); setIsManageOpen(false); }} 
-            onDelete={handleDeleteLibrary} 
-            onRename={handleRenameLibrary} 
+    <>
+        {renderView()}
+        {isManageOpen && (
+          <ManageLibrariesModal
+            libraries={libraries}
+            activeLibraryId={activeLibrary?.id || null}
+            onSwitch={(id) => { setIsManageOpen(false); handleGoHome(); handleSwitchLibrary(id); }}
+            onDelete={handleDeleteLibrary}
+            onRename={handleRenameLibrary}
             onRefresh={handleRefreshLibrary}
             onClose={() => setIsManageOpen(false)}
-          />}
-        {unsupportedMedia && <UnsupportedMediaModal media={unsupportedMedia} onClose={() => setUnsupportedMedia(null)} />}
-      </main>
-    </div>
+          />
+        )}
+        {unsupportedMedia && (
+            <UnsupportedMediaModal media={unsupportedMedia} onClose={() => setUnsupportedMedia(null)} />
+        )}
+    </>
   );
 };
 

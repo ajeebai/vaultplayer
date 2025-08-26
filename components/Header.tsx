@@ -21,6 +21,9 @@ interface HeaderProps {
   progressMessage: string;
   showHidden: boolean;
   onToggleHidden: () => void;
+  sortOrder: string;
+  onSortOrderChange: (order: string) => void;
+  onDeleteLibrary: (id: string) => void;
 }
 
 const SearchIcon: React.FC<{className?: string; onClick?: () => void;}> = ({className, onClick}) => (<svg onClick={onClick} className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>);
@@ -75,15 +78,20 @@ export const Header: React.FC<HeaderProps> = ({
   progressMessage,
   showHidden,
   onToggleHidden,
+  sortOrder,
+  onSortOrderChange,
+  onDeleteLibrary,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [isTagOpen, setIsTagOpen] = useState(false);
+  const [isSortOpen, setIsSortOpen] = useState(false);
   const [isSearchActive, setIsSearchActive] = useState(false);
   const categoryMenuRef = useRef<HTMLDivElement>(null);
   const libraryMenuRef = useRef<HTMLDivElement>(null);
   const tagMenuRef = useRef<HTMLDivElement>(null);
+  const sortMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   
   const handleDirectoryPick = async () => {
@@ -124,6 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
       if (categoryMenuRef.current && !categoryMenuRef.current.contains(event.target as Node)) setIsCategoryOpen(false);
       if (libraryMenuRef.current && !libraryMenuRef.current.contains(event.target as Node)) setIsLibraryOpen(false);
       if (tagMenuRef.current && !tagMenuRef.current.contains(event.target as Node)) setIsTagOpen(false);
+      if (sortMenuRef.current && !sortMenuRef.current.contains(event.target as Node)) setIsSortOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -134,6 +143,12 @@ export const Header: React.FC<HeaderProps> = ({
         searchInputRef.current?.focus();
     }
   }, [isSearchActive]);
+  
+  const sortOptions: {key: string, label: string}[] = [
+      { key: 'name-asc', label: 'Name (A-Z)'},
+      { key: 'date-desc', label: 'Date Added (Newest)'},
+      { key: 'date-asc', label: 'Date Added (Oldest)'},
+  ];
 
   return (
     <header 
@@ -163,6 +178,10 @@ export const Header: React.FC<HeaderProps> = ({
                       <div className="border-t border-brand-gray my-1"></div>
                       <a href="#" onClick={(e) => { e.preventDefault(); handleDirectoryPick(); setIsLibraryOpen(false); }} className="block px-4 py-2 text-sm hover:bg-brand-gray">Add New Library...</a>
                       <a href="#" onClick={(e) => { e.preventDefault(); onManageLibraries(); setIsLibraryOpen(false); }} className="block px-4 py-2 text-sm hover:bg-brand-gray">Manage Libraries...</a>
+                      <div className="border-t border-brand-gray my-1"></div>
+                      <a href="#" onClick={(e) => { e.preventDefault(); onDeleteLibrary(activeLibrary.id); setIsLibraryOpen(false); }} className="block px-4 py-2 text-sm text-red-400 hover:bg-brand-red hover:text-white transition-colors">
+                        Delete Current Library
+                      </a>
                    </div>
                  )}
               </div>
@@ -182,28 +201,50 @@ export const Header: React.FC<HeaderProps> = ({
                    </div>
                  )}
               </div>
-              <div className="relative hidden md:block" ref={tagMenuRef}>
-                 <button onClick={() => setIsTagOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
-                   <span className="font-medium">Tags</span>
-                   <ChevronDownIcon className="w-5 h-5"/>
-                 </button>
-                 {isTagOpen && (
-                   <div className="absolute top-full mt-2 w-56 bg-brand-light-gray rounded-md shadow-lg py-1 max-h-96 overflow-y-auto">
-                      {allTags.length > 0 ? allTags.map(tag => (
-                        <a href="#" key={tag} onClick={(e) => { e.preventDefault(); onSelectTag(tag); setIsTagOpen(false); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-brand-gray">
-                          {tag}
-                        </a>
-                      )) : (
-                        <span className="block px-4 py-2 text-sm text-gray-400">No tags found</span>
-                      )}
-                   </div>
-                 )}
-              </div>
+              {allTags.length > 0 && (
+                <div className="relative hidden md:block" ref={tagMenuRef}>
+                   <button onClick={() => setIsTagOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
+                     <span className="font-medium">Tags</span>
+                     <ChevronDownIcon className="w-5 h-5"/>
+                   </button>
+                   {isTagOpen && (
+                     <div className="absolute top-full mt-2 w-56 bg-brand-light-gray rounded-md shadow-lg py-1 max-h-96 overflow-y-auto">
+                        {allTags.map(tag => (
+                          <a href="#" key={tag} onClick={(e) => { e.preventDefault(); onSelectTag(tag); setIsTagOpen(false); }} className="block px-4 py-2 text-sm text-gray-200 hover:bg-brand-gray">
+                            {tag}
+                          </a>
+                        ))}
+                     </div>
+                   )}
+                </div>
+              )}
           </nav>
         </div>
         
         <div className="flex items-center space-x-2 sm:space-x-4">
-            <button onClick={onToggleHidden} className="text-gray-300 hover:text-white transition-colors" title={showHidden ? "Hide hidden files" : "Show hidden files"}>
+            <div className="relative" ref={sortMenuRef}>
+                 <button onClick={() => setIsSortOpen(prev => !prev)} className="flex items-center space-x-1 text-gray-300 hover:text-white transition-colors">
+                   <span className="font-medium text-sm hidden sm:inline">Sort By</span>
+                   <ChevronDownIcon className="w-5 h-5"/>
+                 </button>
+                 {isSortOpen && (
+                   <div className="absolute top-full right-0 mt-2 w-56 bg-brand-light-gray rounded-md shadow-lg py-1">
+                     {sortOptions.map(opt => (
+                       <a
+                         href="#"
+                         key={opt.key}
+                         onClick={(e) => { e.preventDefault(); onSortOrderChange(opt.key); setIsSortOpen(false); }}
+                         className="flex justify-between items-center px-4 py-2 text-sm text-gray-200 hover:bg-brand-gray"
+                       >
+                         {opt.label}
+                         {sortOrder === opt.key && <CheckIcon className="w-5 h-5 text-brand-red" />}
+                       </a>
+                     ))}
+                   </div>
+                 )}
+            </div>
+
+            <button onClick={onToggleHidden} className="text-gray-300 hover:text-white transition-colors" title={showHidden ? "Hide hidden & unsupported files" : "Show hidden & unsupported files"}>
                 {showHidden ? <EyeIcon className="w-6 h-6" /> : <EyeSlashIcon className="w-6 h-6" />}
             </button>
             <div className="flex items-center">

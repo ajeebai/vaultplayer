@@ -12,6 +12,7 @@ export interface MediaFile {
   isFavorite?: boolean;
   isHidden?: boolean;
   tags?: string[];
+  dateAdded?: number;
 }
 
 export interface VideoFile extends MediaFile {
@@ -47,6 +48,7 @@ interface LibraryVideo {
     message?: string;
   };
   mediaKey: string;
+  dateAdded?: number;
 }
 
 interface MediaMetadata {
@@ -62,7 +64,7 @@ interface MediaMetadata {
 
 
 const DB_NAME = 'LocalFlixDB';
-const DB_VERSION = 4; // Version remains the same, as we're adding a field, not changing schema structure
+const DB_VERSION = 5;
 const VIDEO_STORE_NAME = 'library_videos';
 const METADATA_STORE_NAME = 'media_metadata';
 const STATE_STORE_NAME = 'app_state';
@@ -111,6 +113,7 @@ export class MediaDB {
                 db.createObjectStore(METADATA_STORE_NAME, { keyPath: 'mediaKey' });
             }
         }
+        // v5 removed collections, no schema change needed, but old migration code is removed.
       },
     });
   }
@@ -138,8 +141,12 @@ export class MediaDB {
     const mediaKey = generateMediaKey(media);
     const { poster, duration, width, height, tags, isFavorite, isHidden, ...libraryData } = media;
 
+    const existingVideo = await videoStore.get([media.libraryId, media.fullPath]) as LibraryVideo | undefined;
+
     const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
     libraryMedia.mediaKey = mediaKey;
+    // Preserve the original added date when updating metadata
+    (libraryMedia as LibraryVideo).dateAdded = existingVideo?.dateAdded;
 
     const existingMetadata = await metadataStore.get(mediaKey) as MediaMetadata | undefined;
     
@@ -329,14 +336,32 @@ export class MediaDB {
   async clearMedia(libraryId?: string): Promise<void> {
     const db = await this.dbPromise;
     if (libraryId) {
+        // Get all video records to extract media keys.
+        const videoTx = db.transaction(VIDEO_STORE_NAME, 'readonly');
+        const videoStore = videoTx.objectStore(VIDEO_STORE_NAME);
         const range = IDBKeyRange.bound([libraryId, ''], [libraryId, '\uffff']);
-        const tx = db.transaction(VIDEO_STORE_NAME, 'readwrite');
-        let cursor = await tx.store.openCursor(range);
-        while(cursor) {
-            cursor.delete();
-            cursor = await cursor.continue();
+        const videosInLibrary = await videoStore.getAll(range) as LibraryVideo[];
+        const mediaKeys = [...new Set(videosInLibrary.map(v => v.mediaKey))];
+        await videoTx.done;
+        
+        // Use a single transaction to delete from all related stores.
+        const deleteTx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+        
+        // Delete videos
+        const videoStoreWrite = deleteTx.objectStore(VIDEO_STORE_NAME);
+        let videoCursor = await videoStoreWrite.openCursor(range);
+        while (videoCursor) {
+            videoCursor.delete();
+            videoCursor = await videoCursor.continue();
         }
-        await tx.done;
+
+        // Delete metadata
+        const metadataStoreWrite = deleteTx.objectStore(METADATA_STORE_NAME);
+        for (const key of mediaKeys) {
+            metadataStoreWrite.delete(key);
+        }
+
+        await deleteTx.done;
     } else {
         await db.clear(VIDEO_STORE_NAME);
         await db.clear(METADATA_STORE_NAME);

@@ -80,11 +80,18 @@
 
       [data-theme="dither"] .range-thumb::-webkit-slider-thumb,
       [data-theme="dither"] .range-thumb-sm::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
           background: var(--player-accent-color, var(--brand-red));
-          border: 1px solid var(--text-secondary);
           width: 14px;
           height: 14px;
-          box-shadow: none;
+          box-shadow: 0 0 0 1px var(--text-secondary);
+      }
+      [data-theme="dither"] .range-thumb::-webkit-slider-thumb {
+          margin-top: -4px; /* Center 14px thumb on 6px track */
+      }
+      [data-theme="dither"] .range-thumb-sm::-webkit-slider-thumb {
+          margin-top: -5px; /* Center 14px thumb on 4px track */
       }
       [data-theme="dither"] ::-webkit-scrollbar-thumb {
           background-color: var(--text-secondary) !important;

@@ -1,9 +1,11 @@
+
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VideoFile, MediaDB } from '../services/db';
 import { formatDuration } from '../utils/formatters';
 import { srtToVtt } from '../utils/srt2vtt';
 import { getFileWithPermission } from '../utils/fileSystem';
 import { LibraryInfo } from '../types';
+import { getDominantColor } from '../utils/color';
 
 // New, consistent, and intuitive line icon set
 const PlayIcon: React.FC<{className?: string}> = ({className}) => (<svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor"><path d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z" /></svg>);
@@ -164,6 +166,28 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     return () => clearTimeout(timer);
   }, []);
 
+  // Dynamic color theming
+  useEffect(() => {
+    let isMounted = true;
+    if (video.poster && playerContainerRef.current) {
+      getDominantColor(video.poster).then(color => {
+        if(isMounted && playerContainerRef.current) {
+          playerContainerRef.current.style.setProperty('--player-accent-color', color);
+        }
+      }).catch(err => {
+        console.warn("Could not get dominant color", err);
+      });
+    }
+
+    return () => {
+      isMounted = false;
+      // Reset color on cleanup
+      if(playerContainerRef.current) {
+        playerContainerRef.current.style.removeProperty('--player-accent-color');
+      }
+    };
+  }, [video]);
+
   useEffect(() => {
     if (!playlist) { // Only reset playlist path if not in a remix playlist
       setPlaylistPath(video.parentPath);
@@ -194,193 +218,112 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     }
 
     const sortedVideos = videosInPath.sort((a, b) => a.data.name.localeCompare(b.data.name, undefined, { numeric: true, sensitivity: 'base' }));
-    const sortedFolders = Array.from(subfolders.entries())
+    const sortedFolders: PlaylistItemData[] = Array.from(subfolders.entries())
         .map(([path, name]) => ({ type: 'folder' as const, data: { path, name } }))
         .sort((a, b) => a.data.name.localeCompare(b.data.name));
-
-    let finalItems: PlaylistItemData[] = [...sortedFolders, ...sortedVideos];
     
+    const parentFolderItem: PlaylistItemData[] = [];
     if (playlistPath) {
-        const parentPath = playlistPath.split('/').slice(0, -1).join('/');
-        finalItems.unshift({ type: 'parent', data: { path: parentPath, name: '.. Parent Directory' } });
-    }
-    
-    if (finalItems.filter(i => i.type !== 'parent').length === 0) {
-        const title = "Recommended for you";
-        const otherVideos = allVideos.filter(v => v.fullPath !== video.fullPath && v.poster);
-        const shuffled = otherVideos.sort(() => 0.5 - Math.random());
-        const randomRecommendations = shuffled.slice(0, 20).map(v => ({ type: 'video' as const, data: v }));
-        return { playlistItems: randomRecommendations, playlistTitle: title };
+        const parts = playlistPath.split('/');
+        const parentPath = parts.slice(0, -1).join('/');
+        parentFolderItem.push({ type: 'parent', data: { path: parentPath, name: '.. Go Up' } });
     }
 
-    const title = playlistPath.split('/').pop() || 'Library Root';
-    return { playlistItems: finalItems, playlistTitle: title };
-  }, [allVideos, video.fullPath, playlistPath, playlist]);
-
-  const currentPlaylist = useMemo(() => {
-    if (playlist) return playlist;
-    return allVideos
-        .filter(v => v.parentPath === video.parentPath)
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
-  }, [playlist, allVideos, video]);
-  
-  const hideControls = useCallback(() => {
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    if (isPlaying) {
-      setIsControlsVisible(false);
-      setIsSubtitleMenuOpen(false);
-    }
-  }, [isPlaying]);
-
-  const showControls = useCallback(() => {
-    setIsControlsVisible(true);
-    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    controlsTimeoutRef.current = window.setTimeout(hideControls, 3000);
-  }, [hideControls]);
-
-  const currentIndex = currentPlaylist.findIndex(v => v.fullPath === video.fullPath);
-  const hasNext = currentIndex !== -1 && currentIndex < currentPlaylist.length - 1;
-  const hasPrevious = currentIndex > 0;
-
-  const handleNext = useCallback(() => {
-    if (hasNext) {
-      onSwitchVideo(currentPlaylist[currentIndex + 1]);
-    }
-  }, [hasNext, currentIndex, currentPlaylist, onSwitchVideo]);
-
-  const handlePrevious = () => {
-    if (hasPrevious) {
-      onSwitchVideo(currentPlaylist[currentIndex - 1]);
-    }
-  };
-
-  // Effect to manage the lifecycle of subtitle object URLs to prevent memory leaks.
-  useEffect(() => {
-    // Create a snapshot of the current URLs.
-    const currentSubtitleUrls = subtitles.map(s => s.src);
-    // When the component unmounts or this effect re-runs, clean up the URLs from the *previous* render.
-    return () => {
-      currentSubtitleUrls.forEach(url => URL.revokeObjectURL(url));
+    return {
+        playlistItems: [...parentFolderItem, ...sortedFolders, ...sortedVideos],
+        playlistTitle: playlistPath.split('/').pop() || 'Root'
     };
-  }, [subtitles]);
+  }, [allVideos, playlistPath, playlist]);
 
+  const handleSwitchVideo = useCallback((newVideo: VideoFile) => {
+    if (newVideo.fullPath !== video.fullPath) {
+        onSwitchVideo(newVideo);
+    }
+  }, [onSwitchVideo, video.fullPath]);
+
+  const currentVideoIndex = useMemo(() => {
+    const currentPlaylist = playlist || allVideos.filter(v => v.parentPath === video.parentPath);
+    return currentPlaylist.findIndex(v => v.fullPath === video.fullPath);
+  }, [playlist, allVideos, video]);
+
+  const handleSkip = useCallback((direction: 'next' | 'prev') => {
+    const currentPlaylist = playlist || allVideos.filter(v => v.parentPath === video.parentPath).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+
+    if (currentPlaylist.length > 1) {
+        let nextIndex = currentVideoIndex + (direction === 'next' ? 1 : -1);
+        if (nextIndex >= currentPlaylist.length) nextIndex = 0;
+        if (nextIndex < 0) nextIndex = currentPlaylist.length - 1;
+        
+        handleSwitchVideo(currentPlaylist[nextIndex]);
+    }
+  }, [currentVideoIndex, playlist, allVideos, video, handleSwitchVideo]);
+
+  // Load video source and subtitles
   useEffect(() => {
-    let isMounted = true;
-    let objectUrl: string | null = null;
-  
-    const loadVideo = async () => {
-      setError(null);
-      setVideoSrc(null);
-      // This will trigger the cleanup effect above, revoking old subtitle URLs.
-      setSubtitles([]);
-      setProgress(0);
-      setDuration(0);
-      setIsSubtitleMenuOpen(false);
-      setActiveTrackLabel(null);
-  
+    let videoObjectUrl: string | null = null;
+    let subtitleObjectUrls: string[] = [];
+
+    const loadMedia = async () => {
       try {
-        const file = await getFileWithPermission(video.fileHandle);
-        objectUrl = URL.createObjectURL(file);
-        if (isMounted) {
-          setVideoSrc(objectUrl);
-        }
-  
-        const subTracks = [];
-        for (const sub of video.subtitles || []) {
+        setError(null);
+        setVideoSrc(null);
+        setSubtitles([]);
+        
+        const videoFile = await getFileWithPermission(video.fileHandle);
+        videoObjectUrl = URL.createObjectURL(videoFile);
+        setVideoSrc(videoObjectUrl);
+
+        const subtitlePromises = video.subtitles.map(async (sub) => {
           try {
             const subFile = await getFileWithPermission(sub.fileHandle);
-            let subContent = await subFile.text();
-            if (sub.name.toLowerCase().endsWith('.srt')) {
-              subContent = srtToVtt(subContent);
-            }
-            const subBlob = new Blob([subContent], { type: 'text/vtt' });
-            const subUrl = URL.createObjectURL(subBlob);
-            subTracks.push({ src: subUrl, lang: sub.lang, label: sub.name });
-          } catch (subErr) {
-            console.warn(`Could not load subtitle ${sub.name}:`, subErr);
+            const text = await subFile.text();
+            const vttContent = subFile.name.toLowerCase().endsWith('.srt') ? srtToVtt(text) : text;
+            const blob = new Blob([vttContent], { type: 'text/vtt' });
+            const url = URL.createObjectURL(blob);
+            subtitleObjectUrls.push(url);
+            return { src: url, lang: sub.lang, label: sub.name };
+          } catch (e) {
+            console.error("Error loading subtitle:", sub.name, e);
+            return null;
           }
-        }
-        if (isMounted) {
-          // Setting the new state; the cleanup effect will now be responsible for these URLs.
-          setSubtitles(subTracks);
-        }
+        });
+
+        const resolvedSubtitles = (await Promise.all(subtitlePromises)).filter(Boolean) as { src: string; lang: string; label: string }[];
+        setSubtitles(resolvedSubtitles);
+
       } catch (err: any) {
-        console.error("Error loading video file:", err);
-        if (isMounted) {
-          setError(`Could not load video. ${err.message}. Please ensure the file has not moved and permissions are granted.`);
-        }
+        console.error("Error loading media:", err);
+        setError(`Failed to load video: ${err.message}. Please check file permissions.`);
+        setIsPlaying(false);
       }
     };
-  
-    loadVideo();
-  
+
+    loadMedia();
+
     return () => {
-      isMounted = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (videoObjectUrl) URL.revokeObjectURL(videoObjectUrl);
+      subtitleObjectUrls.forEach(url => URL.revokeObjectURL(url));
     };
   }, [video]);
-
-  // PiP event listeners
-  useEffect(() => {
-    const videoElement = videoRef.current;
-    if (!videoElement) return;
-
-    const onEnterPip = () => setIsPip(true);
-    const onLeavePip = () => setIsPip(false);
-    
-    videoElement.addEventListener('enterpictureinpicture', onEnterPip);
-    videoElement.addEventListener('leavepictureinpicture', onLeavePip);
-
-    // Sync state on load, in case PiP was already active
-    setIsPip(document.pictureInPictureElement === videoElement);
-
-    return () => {
-        videoElement.removeEventListener('enterpictureinpicture', onEnterPip);
-        videoElement.removeEventListener('leavepictureinpicture', onLeavePip);
-    };
-  }, [videoSrc]);
-
-  useEffect(() => {
-    showControls();
-    
-    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
-    const handleClickOutside = (event: MouseEvent) => {
-      if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target as Node)) {
-        setIsSubtitleMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-        if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
-        document.removeEventListener('fullscreenchange', handleFullscreenChange);
-        document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showControls]);
-
+  
+  // Video event handlers
   const handleTimeUpdate = () => {
     if (videoRef.current) {
       setProgress(videoRef.current.currentTime);
       db.updatePlaybackPosition(video.libraryId, video.fullPath, videoRef.current.currentTime);
     }
   };
-
-  const handleLoadedMetadata = () => {
+  
+  const handleDurationChange = () => {
     if (videoRef.current) {
       setDuration(videoRef.current.duration);
-      if(video.playbackPosition && video.playbackPosition < videoRef.current.duration - 5) {
+      if (video.playbackPosition) {
         videoRef.current.currentTime = video.playbackPosition;
-      }
-      for (const track of Array.from(videoRef.current.textTracks)) {
-        track.mode = 'hidden';
       }
     }
   };
-  
-  const togglePlay = useCallback(() => {
+
+  const togglePlay = () => {
     if (videoRef.current) {
       if (videoRef.current.paused) {
         videoRef.current.play();
@@ -390,405 +333,402 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         setIsPlaying(false);
       }
     }
+  };
+  
+  // Controls visibility logic
+  const showControls = useCallback(() => {
+    setIsControlsVisible(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    controlsTimeoutRef.current = window.setTimeout(() => {
+      if (videoRef.current && !videoRef.current.paused) {
+        setIsControlsVisible(false);
+      }
+    }, 3000);
   }, []);
 
-  const toggleFullscreen = useCallback(() => {
-    if (!playerContainerRef.current) return;
+  useEffect(() => {
+    showControls();
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, [showControls, isPlaying]);
+
+  const handleMouseMove = () => {
+    showControls();
+  };
+  
+  const handleMouseLeave = () => {
+    if (isPlaying) {
+      setIsControlsVisible(false);
+    }
+  }
+  
+  const handleSingleClick = () => {
+      togglePlay();
+  };
+
+  const handleDoubleClick = () => {
+    toggleFullscreen();
+  };
+
+  const handleClick = () => {
+    if (clickTimeoutRef.current !== null) {
+      // Double click detected
+      clearTimeout(clickTimeoutRef.current);
+      clickTimeoutRef.current = null;
+      handleDoubleClick();
+    } else {
+      // Single click
+      clickTimeoutRef.current = window.setTimeout(() => {
+        handleSingleClick();
+        clickTimeoutRef.current = null;
+      }, 250);
+    }
+  };
+
+  // Seeking logic
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (videoRef.current) {
+      const time = Number(e.target.value);
+      videoRef.current.currentTime = time;
+      setProgress(time);
+    }
+  };
+  
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (videoRef.current) {
+      const newVolume = Number(e.target.value);
+      videoRef.current.volume = newVolume;
+      setVolume(newVolume);
+      setIsMuted(newVolume === 0);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      const newMutedState = !isMuted;
+      videoRef.current.muted = newMutedState;
+      setIsMuted(newMutedState);
+      if (!newMutedState && volume === 0) {
+        setVolume(0.5);
+        videoRef.current.volume = 0.5;
+      }
+    }
+  };
+  
+  const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      playerContainerRef.current.requestFullscreen();
+      playerContainerRef.current?.requestFullscreen();
     } else {
       document.exitFullscreen();
     }
-  }, []);
+  };
 
-  const togglePip = useCallback(async () => {
-    showControls();
-    if (!videoRef.current || !isPipSupported) return;
+  const togglePip = async () => {
+    if (!videoRef.current) return;
     try {
-        if (document.pictureInPictureElement === videoRef.current) {
+        if (document.pictureInPictureElement) {
             await document.exitPictureInPicture();
-            setIsPip(false);
         } else {
             await videoRef.current.requestPictureInPicture();
-            setIsPip(true);
         }
-    } catch (err) {
-        console.error("PiP Error:", err);
-    }
-  }, [isPipSupported, showControls]);
-
-  const handleVideoAreaClick = () => {
-    if (isPlaylistOpen) {
-        setIsPlaylistOpen(false);
-        return;
-    }
-    
-    if (clickTimeoutRef.current) {
-        clearTimeout(clickTimeoutRef.current);
-        clickTimeoutRef.current = null;
-        toggleFullscreen();
-    } else {
-        clickTimeoutRef.current = window.setTimeout(() => {
-            togglePlay();
-            clickTimeoutRef.current = null;
-        }, 250);
+    } catch (error) {
+        console.error("PiP error:", error);
     }
   };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  
+  // Subtitle logic
+  const handleSubtitleChange = (label: string | null) => {
     if (videoRef.current) {
-      videoRef.current.currentTime = Number(e.target.value);
-      setProgress(Number(e.target.value));
-    }
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVolume = Number(e.target.value);
-    if(videoRef.current) {
-        videoRef.current.volume = newVolume;
-        setVolume(newVolume);
-        setIsMuted(newVolume === 0);
-    }
-  };
-
-  const toggleMute = useCallback(() => {
-     if(videoRef.current) {
-        videoRef.current.muted = !isMuted;
-        setIsMuted(!isMuted);
-    }
-  }, [isMuted]);
-
-  const seek = useCallback((seconds: number) => {
-    if(videoRef.current) {
-      videoRef.current.currentTime += seconds;
-    }
-  }, []);
-
-  const handleSelectSubtitle = (trackLabel: string | null) => {
-    if (videoRef.current) {
-      for (const track of Array.from(videoRef.current.textTracks)) {
-        track.mode = (track.label === trackLabel) ? 'showing' : 'hidden';
+      const tracks = videoRef.current.textTracks;
+      for (let i = 0; i < tracks.length; i++) {
+        tracks[i].mode = tracks[i].label === label ? 'showing' : 'hidden';
       }
+      setActiveTrackLabel(label);
     }
-    setActiveTrackLabel(trackLabel);
     setIsSubtitleMenuOpen(false);
   };
-
-  const handleLoadSubtitleClick = () => {
-    subtitleInputRef.current?.click();
-  };
-
-  const handleSubtitleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Reset input value to allow loading the same file again if needed
-    event.target.value = '';
-
-    try {
-        let subContent = await file.text();
-        if (file.name.toLowerCase().endsWith('.srt')) {
-            subContent = srtToVtt(subContent);
-        }
-        const subBlob = new Blob([subContent], { type: 'text/vtt' });
-        const subUrl = URL.createObjectURL(subBlob);
-
-        const newTrack = { src: subUrl, lang: 'xx', label: `Loaded: ${file.name}` };
+  
+  const handleCustomSubtitle = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && videoRef.current) {
+        const url = URL.createObjectURL(file);
+        // Create a new track element and append it
+        const track = document.createElement('track');
+        track.src = url;
+        track.kind = 'subtitles';
+        track.srclang = 'custom';
+        track.label = file.name;
+        track.default = true;
+        videoRef.current.appendChild(track);
         
-        setSubtitles(prev => [...prev, newTrack]);
-        // Defer selection to allow React to render the new track element
-        setTimeout(() => handleSelectSubtitle(newTrack.label), 100);
-
-    } catch (err) {
-        console.error("Error loading subtitle file:", err);
-        alert("Could not load or parse the subtitle file.");
+        // After appending, we need to re-evaluate tracks
+        setTimeout(() => {
+            const newTracks = videoRef.current?.textTracks;
+            if (newTracks) {
+                for(let i = 0; i < newTracks.length; i++) {
+                    newTracks[i].mode = 'hidden';
+                }
+                const newTrack = Array.from(newTracks).find(t => t.label === file.name);
+                if (newTrack) {
+                    newTrack.mode = 'showing';
+                    setActiveTrackLabel(file.name);
+                }
+            }
+        }, 100);
+        setIsSubtitleMenuOpen(false);
     }
   };
-
-  const progressPercentage = duration > 0 ? (progress / duration) * 100 : 0;
-  const volumePercentage = isMuted ? 0 : volume * 100;
-
+  
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const activeElement = document.activeElement;
-      if (activeElement && activeElement.tagName === 'INPUT') return;
-      
-      showControls();
+      // Ignore shortcuts if an input is focused
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-      switch (e.key.toLowerCase()) {
-        case ' ': e.preventDefault(); togglePlay(); break;
-        case 'f': toggleFullscreen(); break;
-        case 'p': e.preventDefault(); togglePip(); break;
-        case 'm': toggleMute(); break;
-        case 'arrowright': seek(10); break;
-        case 'arrowleft': seek(-10); break;
-        case 'arrowup':
+      switch(e.key) {
+        case ' ':
           e.preventDefault();
-          if (videoRef.current) {
-            const newVolume = Math.min(1, videoRef.current.volume + 0.1);
-            videoRef.current.volume = newVolume;
-            setVolume(newVolume);
-            setIsMuted(newVolume === 0);
+          togglePlay();
+          break;
+        case 'f':
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case 'm':
+          e.preventDefault();
+          toggleMute();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          if (videoRef.current) videoRef.current.currentTime += 10;
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          if (videoRef.current) videoRef.current.currentTime -= 10;
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          if (videoRef.current && videoRef.current.volume < 1) videoRef.current.volume = Math.min(1, videoRef.current.volume + 0.1);
+          setVolume(videoRef.current?.volume || 0);
+          break;
+        case 'ArrowDown':
+          e.preventDefault();
+          if (videoRef.current && videoRef.current.volume > 0) videoRef.current.volume = Math.max(0, videoRef.current.volume - 0.1);
+          setVolume(videoRef.current?.volume || 0);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            handleClose();
           }
           break;
-        case 'arrowdown':
-          e.preventDefault();
-          if (videoRef.current) {
-            const newVolume = Math.max(0, videoRef.current.volume - 0.1);
-            videoRef.current.volume = newVolume;
-            setVolume(newVolume);
-            setIsMuted(newVolume === 0);
-          }
-          break;
-        case 'escape':
-          if (isPlaylistOpen) setIsPlaylistOpen(false);
-          else if (document.fullscreenElement) document.exitFullscreen();
-          else handleClose();
-          break;
+        case 'n':
+            e.preventDefault();
+            handleSkip('next');
+            break;
+        case 'p':
+            e.preventDefault();
+            handleSkip('prev');
+            break;
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [togglePlay, toggleFullscreen, togglePip, toggleMute, seek, showControls, isPlaylistOpen, handleClose]);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [togglePlay, toggleMute, toggleFullscreen, handleClose, handleSkip]);
 
-
-  if (error) {
-    return (
-        <div className="fixed inset-0 bg-black flex flex-col items-center justify-center text-white z-50">
-            <div className="text-center p-8 max-w-lg">
-                <h2 className="text-2xl font-bold text-brand-red mb-4">Playback Error</h2>
-                <p className="text-gray-300 mb-6">{error}</p>
-                <button
-                    onClick={handleClose}
-                    className="bg-brand-red text-white font-bold py-2 px-6 rounded-md hover:bg-red-700 transition-colors"
-                >
-                    Back to Library
-                </button>
-            </div>
-        </div>
-    );
-  }
+  // Fullscreen change listener
+  useEffect(() => {
+    const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+  
+  // PIP change listener
+  useEffect(() => {
+      const videoEl = videoRef.current;
+      if (!videoEl) return;
+      const handlePipChange = () => setIsPip(!!document.pictureInPictureElement);
+      videoEl.addEventListener('enterpictureinpicture', handlePipChange);
+      videoEl.addEventListener('leavepictureinpicture', handlePipChange);
+      return () => {
+          videoEl.removeEventListener('enterpictureinpicture', handlePipChange);
+          videoEl.removeEventListener('leavepictureinpicture', handlePipChange);
+      };
+  }, []);
+  
+  // Close menu on click outside
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (subtitleMenuRef.current && !subtitleMenuRef.current.contains(event.target as Node)) {
+              setIsSubtitleMenuOpen(false);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
-    <>
-      <div 
-          ref={playerContainerRef} 
-          className={`fixed inset-0 bg-black z-50 flex items-center justify-center player-container ${isVisible ? 'is-visible' : ''}`}
-          onMouseMove={showControls}
-          onMouseEnter={showControls}
-          onMouseLeave={hideControls}
-          onClick={handleVideoAreaClick}
-      >
-        <video
-          ref={videoRef}
-          src={videoSrc || ''}
-          className="w-full h-full object-contain"
-          autoPlay
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleNext}
-        >
-          {subtitles.map(sub => (
-            <track key={sub.src} kind="subtitles" srcLang={sub.lang} src={sub.src} label={sub.label} />
-          ))}
-        </video>
-        
-        <div className={`absolute inset-0 player-controls ${!isControlsVisible ? 'player-controls-hidden' : ''}`}>
-          {/* Top Controls */}
-          <div 
-            className="absolute top-0 left-0 right-0 p-4 bg-gradient-to-b from-black/80 to-transparent flex justify-between items-center space-x-4 player-top-bar"
-            onMouseEnter={showControls}
-            onClick={e => e.stopPropagation()}
+    <div 
+        ref={playerContainerRef}
+        className={`fixed inset-0 bg-black z-50 flex items-center justify-center player-container ${isVisible ? 'is-visible' : ''}`}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+    >
+      <div className="absolute inset-0 w-full h-full" onClick={handleClick}>
+        {videoSrc && !error ? (
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            autoPlay
+            onTimeUpdate={handleTimeUpdate}
+            onDurationChange={handleDurationChange}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onEnded={() => handleSkip('next')}
+            className="w-full h-full object-contain"
           >
-              <div className="flex-1 min-w-0">
-                <h2 className="text-white text-2xl font-bold truncate">{video.name.replace(/\.[^/.]+$/, "")}</h2>
-              </div>
-              <button onClick={handleClose} className="text-white flex-shrink-0 player-themed-button">
-                  <CloseIcon className="w-8 h-8"/>
-              </button>
+            {subtitles.map(sub => <track key={sub.label} kind="subtitles" srcLang={sub.lang} src={sub.src} label={sub.label} />)}
+          </video>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-400">
+            {error ? <p className="text-red-400 max-w-lg text-center">{error}</p> : <div className="text-xl animate-pulse">Loading media...</div>}
           </div>
+        )}
+      </div>
 
-          {/* Bottom Controls */}
-          <div 
-            className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 to-transparent player-bottom-bar"
-            onMouseEnter={showControls}
-            onClick={e => e.stopPropagation()}
-          >
-              {/* Seek Bar */}
-              <div className="flex items-center space-x-2">
-                  <span className="text-white text-sm">{formatDuration(progress)}</span>
-                  <input
-                      type="range"
-                      min="0"
-                      max={duration}
-                      value={progress}
-                      onChange={handleSeek}
-                      className="w-full h-1 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb"
-                      style={{ background: `linear-gradient(to right, var(--player-accent-color, var(--brand-red)) ${progressPercentage}%, rgba(128,128,128,0.5) ${progressPercentage}%)`}}
-                  />
-                  <span className="text-white text-sm">{formatDuration(duration)}</span>
-              </div>
-              {/* Buttons */}
-              <div className="flex justify-between items-center mt-2">
-                  <div className="flex items-center space-x-2 sm:space-x-4">
-                      <button onClick={handlePrevious} disabled={!hasPrevious} className="player-themed-button">
-                          <SkipPreviousIcon className="w-8 h-8"/>
-                      </button>
-                      <button onClick={() => seek(-10)} className="hidden sm:block player-themed-button">
-                          <Replay10Icon className="w-8 h-8"/>
-                      </button>
-                      <button onClick={togglePlay} className="player-themed-button">
-                          {isPlaying ? <PauseIcon className="w-10 h-10"/> : <PlayIcon className="w-10 h-10"/>}
-                      </button>
-                      <button onClick={() => seek(10)} className="hidden sm:block player-themed-button">
-                          <Forward10Icon className="w-8 h-8"/>
-                      </button>
-                      <button onClick={handleNext} disabled={!hasNext} className="player-themed-button">
-                          <SkipNextIcon className="w-8 h-8"/>
-                      </button>
-                      <div className="flex items-center space-x-2">
-                          <button onClick={toggleMute} className="player-themed-button">
-                              {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6"/> : <VolumeHighIcon className="w-6 h-6"/>}
-                          </button>
-                          <input
-                              type="range"
-                              min="0"
-                              max="1"
-                              step="0.05"
-                              value={isMuted ? 0 : volume}
-                              onChange={handleVolumeChange}
-                              className="w-24 h-1 bg-gray-500/50 rounded-lg appearance-none cursor-pointer range-thumb-sm hidden sm:block"
-                              style={{ background: `linear-gradient(to right, var(--player-accent-color, var(--brand-red)) ${volumePercentage}%, rgba(128,128,128,0.5) ${volumePercentage}%)`}}
-                          />
-                      </div>
-                  </div>
-                  <div className="flex items-center space-x-2 sm:space-x-4">
-                      <div className="relative">
-                          <button onClick={() => setIsSubtitleMenuOpen(o => !o)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`} title="Subtitles / CC">
-                              <CCIcon className="w-7 h-7"/>
-                          </button>
-                          {isSubtitleMenuOpen && (
-                              <div ref={subtitleMenuRef} className="absolute bottom-full right-0 mb-2 bg-black/80 backdrop-blur-sm rounded-md py-1 w-48 text-white">
-                                  <ul>
-                                      <li>
-                                          <button 
-                                              onClick={() => handleSelectSubtitle(null)} 
-                                              className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${!activeTrackLabel ? 'player-active-bg text-white' : 'hover:bg-brand-gray/50'}`}
-                                          >
-                                              Off
-                                          </button>
-                                      </li>
-                                      {subtitles.map(sub => (
-                                          <li key={sub.label}>
-                                              <button 
-                                                  onClick={() => handleSelectSubtitle(sub.label)} 
-                                                  className={`w-full text-left px-3 py-1.5 text-sm transition-colors ${activeTrackLabel === sub.label ? 'player-active-bg text-white' : 'hover:bg-brand-gray/50'}`}
-                                              >
-                                                  {getSubtitleDisplayName(sub)}
-                                              </button>
-                                          </li>
-                                      ))}
-                                      <div className="border-t border-brand-gray/50 my-1"></div>
-                                      <li>
-                                        <button onClick={handleLoadSubtitleClick} className="w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-brand-gray/50">
-                                            Load from file...
-                                        </button>
-                                      </li>
-                                  </ul>
-                              </div>
-                          )}
-                      </div>
-                      {(allVideos.length > 1) && (
-                        <button onClick={(e) => { e.stopPropagation(); setIsPlaylistOpen(o => !o); }} className={`player-themed-button ${isPlaylistOpen ? 'player-active-button' : ''}`}>
-                            <PlaylistIcon className="w-7 h-7" />
-                        </button>
-                      )}
-                      {isPipSupported && (
-                        <button onClick={togglePip} className="player-themed-button" title="Picture-in-Picture (p)">
-                          {isPip ? <PipExitIcon className="w-7 h-7"/> : <PipEnterIcon className="w-7 h-7"/>}
-                        </button>
-                      )}
-                      <button onClick={toggleFullscreen} className="player-themed-button">
-                          {isFullscreen ? <FullscreenExitIcon className="w-7 h-7"/> : <FullscreenIcon className="w-7 h-7"/>}
-                      </button>
-                  </div>
-              </div>
+      <div className={`absolute inset-0 player-controls ${isControlsVisible ? '' : 'player-controls-hidden'}`}>
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/70 to-transparent p-4 flex justify-between items-center player-top-bar">
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold text-white">{video.name.replace(/\.[^/.]+$/, "")}</h2>
+            <p className="text-sm text-gray-300">{video.parentPath}</p>
           </div>
+          <button onClick={handleClose} className="player-themed-button">
+            <CloseIcon className="w-8 h-8"/>
+          </button>
         </div>
 
-        <section 
-          className={`absolute bottom-0 right-0 max-h-[35vh] w-full max-w-sm bg-black/80 backdrop-blur-md shadow-2xl transition-transform duration-300 ease-in-out z-10 flex flex-col ${isPlaylistOpen ? 'translate-x-0' : 'translate-x-full'}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-            <div className="p-2 flex justify-between items-center flex-shrink-0">
-                <h3 className="text-lg font-bold text-white truncate px-2">{playlistTitle}</h3>
-                <button onClick={() => setIsPlaylistOpen(false)} className="text-gray-400 hover:text-white">
-                    <CloseIcon className="w-6 h-6" />
+        {/* Bottom bar */}
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4 player-bottom-bar">
+           {/* Seek bar */}
+          <div className="flex items-center space-x-4 mb-2">
+            <span className="text-white text-sm font-mono">{formatDuration(progress)}</span>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              value={progress || 0}
+              onChange={handleSeek}
+              className="w-full h-1.5 accent-[var(--player-accent-color,var(--brand-red))] bg-white/20 rounded-lg appearance-none cursor-pointer range-thumb"
+            />
+            <span className="text-white text-sm font-mono">{formatDuration(duration)}</span>
+          </div>
+        
+          <div className="flex justify-between items-center">
+            {/* Left controls */}
+            <div className="flex items-center space-x-4">
+              <button onClick={() => handleSkip('prev')} className="player-themed-button" disabled={currentVideoIndex === -1}><SkipPreviousIcon className="w-6 h-6"/></button>
+              <button onClick={() => togglePlay()} className="player-themed-button">{isPlaying ? <PauseIcon className="w-8 h-8"/> : <PlayIcon className="w-8 h-8"/>}</button>
+              <button onClick={() => handleSkip('next')} className="player-themed-button" disabled={currentVideoIndex === -1}><SkipNextIcon className="w-6 h-6"/></button>
+              <div className="flex items-center space-x-2">
+                <button onClick={toggleMute} className="player-themed-button">
+                  {isMuted || volume === 0 ? <VolumeOffIcon className="w-6 h-6"/> : <VolumeHighIcon className="w-6 h-6"/>}
                 </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  className="w-24 h-1 accent-[var(--player-accent-color,var(--brand-red))] bg-white/20 rounded-lg appearance-none cursor-pointer range-thumb-sm"
+                />
+              </div>
             </div>
-            <div className="flex-grow min-h-0 overflow-y-auto playlist-scroll pr-1">
-                <ul className="space-y-0.5 px-2 pb-2">
-                    {playlistItems.map((item) => (
-                        <PlaylistItem
+
+            {/* Right controls */}
+            <div className="flex items-center space-x-4">
+               {isPipSupported && (
+                 <button onClick={togglePip} className={`player-themed-button ${isPip ? 'player-active-button': ''}`} title={isPip ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture"}>
+                   {isPip ? <PipExitIcon className="w-6 h-6"/> : <PipEnterIcon className="w-6 h-6"/>}
+                 </button>
+               )}
+               <button onClick={() => setIsPlaylistOpen(p => !p)} className={`player-themed-button ${isPlaylistOpen ? 'player-active-button' : ''}`} title="Playlist">
+                <PlaylistIcon className="w-6 h-6"/>
+               </button>
+               <div className="relative" ref={subtitleMenuRef}>
+                 <button onClick={() => setIsSubtitleMenuOpen(p => !p)} className={`player-themed-button ${activeTrackLabel ? 'player-active-button' : ''}`} title="Subtitles">
+                   <CCIcon className="w-6 h-6"/>
+                 </button>
+                 {isSubtitleMenuOpen && (
+                    <div className="absolute bottom-full right-0 mb-2 w-56 bg-brand-black/80 backdrop-blur-sm rounded-md shadow-lg py-1 text-white">
+                        <a href="#" onClick={(e) => { e.preventDefault(); handleSubtitleChange(null); }} className="block px-4 py-2 text-sm hover:player-active-bg-light">Off</a>
+                        {subtitles.map(sub => (
+                           <a key={sub.label} href="#" onClick={(e) => { e.preventDefault(); handleSubtitleChange(sub.label); }} className={`block px-4 py-2 text-sm hover:player-active-bg-light ${activeTrackLabel === sub.label ? 'player-active-bg' : ''}`}>{getSubtitleDisplayName(sub)}</a>
+                        ))}
+                        <div className="border-t border-brand-gray/50 my-1"></div>
+                        <label className="block px-4 py-2 text-sm hover:player-active-bg-light cursor-pointer">
+                            Load custom...
+                            <input type="file" accept=".vtt,.srt" ref={subtitleInputRef} onChange={handleCustomSubtitle} className="hidden" />
+                        </label>
+                    </div>
+                 )}
+               </div>
+               <button onClick={toggleFullscreen} className="player-themed-button" title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}>
+                 {isFullscreen ? <FullscreenExitIcon className="w-6 h-6"/> : <FullscreenIcon className="w-6 h-6"/>}
+               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Playlist Panel */}
+      <div className="absolute bottom-24 right-4 w-96 max-w-[90vw] bg-brand-black/80 backdrop-blur-sm rounded-lg shadow-2xl overflow-hidden transition-all duration-300 ease-in-out" style={{ maxHeight: isPlaylistOpen ? '60vh' : '0' }}>
+          <div className="p-2">
+              <h3 className="font-bold text-lg mb-2 px-2">{playlistTitle}</h3>
+              <ul className="space-y-1 p-2 overflow-y-auto" style={{ maxHeight: '55vh' }}>
+                  {playlistItems.map((item) => (
+                      <PlaylistItem
                           key={item.type === 'video' ? item.data.fullPath : item.data.path}
                           item={item}
-                          onVideoClick={onSwitchVideo}
+                          onVideoClick={handleSwitchVideo}
                           onFolderClick={setPlaylistPath}
                           isActive={item.type === 'video' && item.data.fullPath === video.fullPath}
-                        />
-                    ))}
-                </ul>
-            </div>
-        </section>
-        
-        <input type="file" ref={subtitleInputRef} onChange={handleSubtitleFileChange} accept=".vtt,.srt" className="hidden" />
-
-        <style>{`
-          .range-thumb::-webkit-slider-thumb {
-              -webkit-appearance: none;
-              appearance: none;
-              width: 16px;
-              height: 16px;
-              background: var(--player-accent-color, var(--brand-red));
-              cursor: pointer;
-              border-radius: 50%;
-              margin-top: -6px; /* Center thumb on track */
-              transition: background-color 0.2s ease;
-          }
-          .range-thumb-sm::-webkit-slider-thumb {
-              -webkit-appearance: none;
-              appearance: none;
-              width: 12px;
-              height: 12px;
-              background: var(--player-accent-color, var(--brand-red));
-              cursor: pointer;
-              border-radius: 50%;
-              margin-top: -5px; /* Center thumb on track */
-              transition: background-color 0.2s ease;
-          }
-          .playlist-scroll::-webkit-scrollbar {
-              width: 8px;
-          }
-          .playlist-scroll::-webkit-scrollbar-track {
-              background: rgba(30, 30, 30, 0.5);
-              border-radius: 4px;
-          }
-          .playlist-scroll::-webkit-scrollbar-thumb {
-              background-color: #4a4a4a;
-              border-radius: 4px;
-              border: 2px solid transparent;
-              background-clip: content-box;
-          }
-          .playlist-scroll::-webkit-scrollbar-thumb:hover {
-              background-color: #6a6a6a;
-          }
-        `}</style>
+                      />
+                  ))}
+              </ul>
+          </div>
       </div>
-    </>
+    </div>
   );
 };
+
+// Custom styles for range inputs
+const style = document.createElement('style');
+style.innerHTML = `
+.range-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--player-accent-color, var(--brand-red));
+  cursor: pointer;
+  box-shadow: 0 0 5px var(--brand-red-glow);
+  transition: background 0.2s ease;
+}
+.range-thumb-sm::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--player-accent-color, var(--brand-red));
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+`;
+document.head.appendChild(style);

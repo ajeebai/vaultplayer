@@ -219,6 +219,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
         onUpdate({ type: 'deleted_files', payload });
         break;
       case 'discovered':
+        const now = Date.now();
         const initialMedia = payload.map((item: any): VideoFile => {
             const { mediaHandle, subtitles: subtitleHandles, path } = item;
             const fullPath = path.join('/');
@@ -238,6 +239,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
               }),
               size: 0,
               lastModified: 0,
+              dateAdded: now,
             };
         });
         
