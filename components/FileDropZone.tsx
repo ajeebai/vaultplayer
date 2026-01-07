@@ -1,6 +1,10 @@
 
 import React, { useCallback, useState, useRef } from 'react';
 
+interface FileWithRelativePath extends File {
+  webkitRelativePath: string;
+}
+
 interface FileDropZoneProps {
   onDirectorySelected: (handle: FileSystemDirectoryHandle | File[]) => void;
   isPickerSupported: boolean;
@@ -16,13 +20,11 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
   const handleDirectoryPick = async () => {
     setError(null);
     if (!isPickerSupported) {
-      // Fallback for Firefox/Safari
       fileInputRef.current?.click();
       return;
     }
     
     if (!window.showDirectoryPicker) {
-      setError("Your browser doesn't support the modern Folder Picker. Please use the fallback selector.");
       fileInputRef.current?.click();
       return;
     }
@@ -45,6 +47,43 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
     }
   };
 
+  // Helper to recurse through FileSystemEntry (Firefox/Legacy Drop)
+  const traverseEntry = async (entry: any, path: string = ''): Promise<File[]> => {
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        entry.file((file: File) => {
+          // We "mock" webkitRelativePath for the worker to parse
+          Object.defineProperty(file, 'webkitRelativePath', {
+            value: path ? `${path}/${file.name}` : file.name,
+            writable: false
+          });
+          resolve([file]);
+        });
+      });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      const entries = await new Promise<any[]>((resolve) => {
+        const allEntries: any[] = [];
+        const readBatch = () => {
+          reader.readEntries((results: any[]) => {
+            if (results.length) {
+              allEntries.push(...results);
+              readBatch();
+            } else {
+              resolve(allEntries);
+            }
+          });
+        };
+        readBatch();
+      });
+      
+      const newPath = path ? `${path}/${entry.name}` : entry.name;
+      const files = await Promise.all(entries.map(e => traverseEntry(e, newPath)));
+      return files.flat();
+    }
+    return [];
+  };
+
   const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -55,7 +94,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
     if (items && items.length > 0) {
       const item = items[0];
       
-      // 1. Try modern File System Access API
+      // 1. Try modern File System Access API (Chrome/Edge)
       if (item.getAsFileSystemHandle) {
         try {
           const handle = await item.getAsFileSystemHandle();
@@ -68,18 +107,23 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
         }
       }
 
-      // 2. Try webkitGetAsEntry (Firefox fallback)
+      // 2. Try webkitGetAsEntry (Firefox/Safari fallback)
       if (item.webkitGetAsEntry) {
         const entry = item.webkitGetAsEntry();
-        if (entry && entry.isDirectory) {
-          // Since we can't easily convert a webkitEntry to a FileSystemDirectoryHandle 
-          // in a cross-browser way that works in workers, we use the DataTransfer's files.
-          const files = event.dataTransfer.files;
+        if (entry) {
+          const files = await traverseEntry(entry);
           if (files.length > 0) {
-             onDirectorySelected(Array.from(files));
-             return;
+            onDirectorySelected(files);
+            return;
           }
         }
+      }
+
+      // 3. Last resort fallback to standard file list (no subfolders)
+      const files = Array.from(event.dataTransfer.files);
+      if (files.length > 0) {
+        onDirectorySelected(files);
+        return;
       }
 
       setError('Please drop a single folder, not individual files.');
@@ -138,8 +182,8 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
               Select Media Folder
             </button>
             {!isPickerSupported && (
-              <p className="text-xs text-yellow-500/80 px-4 max-w-xs">
-                Note: In Firefox, libraries may not persist after a page refresh. For the full "Vault" experience, we recommend Chrome or Edge.
+              <p className="text-xs text-yellow-500/80 px-4 max-w-xs mt-4">
+                Tip: In Firefox, dropped folders are fully supported. Note that libraries won't persist after a page refresh due to browser security restrictions.
               </p>
             )}
           </div>
