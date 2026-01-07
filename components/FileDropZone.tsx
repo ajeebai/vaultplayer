@@ -1,8 +1,8 @@
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 
 interface FileDropZoneProps {
-  onDirectorySelected: (handle: FileSystemDirectoryHandle) => void;
+  onDirectorySelected: (handle: FileSystemDirectoryHandle | File[]) => void;
   isPickerSupported: boolean;
 }
 
@@ -11,38 +11,45 @@ const FolderIcon: React.FC<{className?: string}> = ({className}) => (<svg classN
 export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected, isPickerSupported }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDirectoryPick = async () => {
     setError(null);
-    if (!isPickerSupported) {
-      setError("The folder picker is not supported in this browser or context (e.g., a sandboxed iframe). Please try dragging and dropping the folder instead.");
-      return;
-    }
-    if (!window.showDirectoryPicker) {
-      setError("Your browser doesn't support this feature. Please try a modern browser like Chrome or Edge.");
-      return;
-    }
-
-    try {
-      // Request read-only permissions.
-      const handle = await window.showDirectoryPicker({ mode: 'read' });
-      onDirectorySelected(handle);
-    } catch (err: any) {
-      // AbortError is thrown when the user cancels the picker, so we can ignore it.
-      if (err.name !== 'AbortError') {
-        console.error("Error picking directory:", err);
-        setError("Could not open directory. Please check permissions and try again.");
-      }
+    if (isPickerSupported && window.showDirectoryPicker) {
+        try {
+            const handle = await window.showDirectoryPicker({ mode: 'read' });
+            onDirectorySelected(handle);
+        } catch (err: any) {
+            if (err.name !== 'AbortError') setError("Could not open directory.");
+        }
+    } else {
+        // Fallback for Firefox
+        fileInputRef.current?.click();
     }
   };
 
-  const processHandle = useCallback(async (handle: FileSystemHandle | null) => {
-    if (handle && handle.kind === 'directory') {
-      onDirectorySelected(handle as FileSystemDirectoryHandle);
-    } else {
-      setError('Please drop a single folder, not a file.');
-    }
-  }, [onDirectorySelected]);
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+          onDirectorySelected(Array.from(files));
+      }
+  };
+
+  const traverseEntry = async (entry: any): Promise<File[]> => {
+      const files: File[] = [];
+      if (entry.isFile) {
+          const file = await new Promise<File>((resolve) => entry.file(resolve));
+          files.push(file);
+      } else if (entry.isDirectory) {
+          const reader = entry.createReader();
+          const entries = await new Promise<any[]>((resolve) => reader.readEntries(resolve));
+          for (const child of entries) {
+              const nestedFiles = await traverseEntry(child);
+              files.push(...nestedFiles);
+          }
+      }
+      return files;
+  };
 
   const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -50,83 +57,72 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
     setIsDragging(false);
     setError(null);
 
-    if (event.dataTransfer.items && event.dataTransfer.items.length > 0) {
-      const item = event.dataTransfer.items[0];
-      // Use getAsFileSystemHandle if available for modern browsers
+    const items = event.dataTransfer.items;
+    if (items && items.length > 0) {
+      const item = items[0];
       if (item.getAsFileSystemHandle) {
         try {
           const handle = await item.getAsFileSystemHandle();
-          await processHandle(handle);
-        } catch (err) {
-            console.error('Error getting file system handle:', err);
-            setError('Could not access the dropped folder. This can happen with system-protected folders.');
-        }
+          if (handle?.kind === 'directory') onDirectorySelected(handle as FileSystemDirectoryHandle);
+          else setError('Please drop a folder.');
+        } catch (err) { setError('Access denied.'); }
+      } else if (item.webkitGetAsEntry) {
+          // Firefox Fallback for Drag and Drop
+          const entry = item.webkitGetAsEntry();
+          if (entry?.isDirectory) {
+              const files = await traverseEntry(entry);
+              onDirectorySelected(files);
+          } else {
+              setError('Please drop a folder.');
+          }
       } else {
-        setError("Your browser doesn't fully support folder drag-and-drop. Please use the 'Select Folder' button if available.");
+          setError("Your browser doesn't support folder selection.");
       }
-    } else {
-        setError('Could not read the dropped item. Please try again.');
     }
-  }, [processHandle]);
-  
-  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (event.dataTransfer.items && event.dataTransfer.items.length > 0) {
-      setIsDragging(true);
-    }
-  };
-
-  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setIsDragging(false);
-  };
-  
-  const borderStyle = isDragging ? 'border-brand-red' : 'border-brand-light-gray';
+  }, [onDirectorySelected]);
 
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center p-8 max-w-2xl mx-auto">
         <h1 className="text-5xl font-bold text-brand-red mb-4 font-black tracking-tighter">Vault</h1>
-        <p className="text-xl text-gray-300 mb-8">Your personal media vault. <br/> Secure. Private. Offline.</p>
+        <p className="text-xl text-gray-300 mb-8">Secure. Private. Offline. <br/> Works in Firefox too.</p>
         
+        <input 
+            type="file" 
+            ref={fileInputRef} 
+            style={{ display: 'none' }} 
+            onChange={handleFileInputChange}
+            // @ts-ignore - webkitdirectory is non-standard but required for Firefox/Safari folder selection
+            webkitdirectory="true"
+        />
+
         <div
           onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          className={`border-4 border-dashed ${borderStyle} rounded-2xl p-10 md:p-20 transition-all duration-300 bg-brand-gray/30 ${isDragging ? 'shadow-2xl shadow-brand-red-glow' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDragEnter={() => setIsDragging(true)}
+          onDragLeave={() => setIsDragging(false)}
+          className={`border-4 border-dashed ${isDragging ? 'border-brand-red shadow-2xl shadow-brand-red-glow' : 'border-brand-light-gray'} rounded-2xl p-10 md:p-20 transition-all duration-300 bg-brand-gray/30`}
         >
           <div className="flex flex-col items-center justify-center space-y-4">
             <FolderIcon className="w-24 h-24 text-gray-400" />
-            <p className="text-lg text-gray-300">Drag & Drop a folder to create your first library</p>
+            <p className="text-lg text-gray-300">Drag & Drop a folder</p>
             <p className="text-gray-500">or</p>
             <button
               onClick={handleDirectoryPick}
-              disabled={!isPickerSupported}
-              className="bg-brand-red text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-red-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
+              className="bg-brand-red text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-red-700 transition-colors"
             >
               Select Media Folder
             </button>
-             <p className="text-xs text-gray-500 pt-2">Selecting a folder grants read permission to your media.</p>
           </div>
         </div>
 
         {!isPickerSupported && (
-          <p className="text-yellow-400 mt-4 text-sm">
-            The folder picker is disabled in this view. Please use drag & drop, or open Vault in its own browser tab.
+          <p className="text-blue-400 mt-4 text-sm max-w-sm mx-auto">
+            Vault is running in <strong>Compatibility Mode</strong>. Your library will be saved, but re-scanning requires re-selecting the folder.
           </p>
         )}
         
-        {error && (
-          <p className="text-red-500 mt-4 bg-red-900/50 p-3 rounded-lg">{error}</p>
-        )}
+        {error && <p className="text-red-500 mt-4 bg-red-900/50 p-3 rounded-lg">{error}</p>}
       </div>
     </div>
   );

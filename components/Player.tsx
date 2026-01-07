@@ -405,8 +405,9 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
             const newTracks = videoRef.current?.textTracks;
             if (newTracks) {
                 for(let i = 0; i < newTracks.length; i++) newTracks[i].mode = 'hidden';
-                const newTrack = Array.from(newTracks).find(t => t.label === file.name);
-                if (newTrack) { newTrack.mode = 'showing'; setActiveTrackLabel(file.name); }
+                // Fix: Cast tracks to any to access label and mode properties on unknown type
+                const newTrack = Array.from(newTracks).find((t: any) => t.label === file.name);
+                if (newTrack) { (newTrack as any).mode = 'showing'; setActiveTrackLabel(file.name); }
             }
         }, 100);
         setIsSubtitleMenuOpen(false);
