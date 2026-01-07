@@ -22,7 +22,7 @@ export interface AppState {
 export interface LibraryInfo {
   id: string;
   name: string;
-  handle?: FileSystemDirectoryHandle; // Optional for non-Chromium browsers
+  handle: FileSystemDirectoryHandle | File[];
 }
 
 export interface CategoryNode {

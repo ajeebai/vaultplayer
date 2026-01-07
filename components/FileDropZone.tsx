@@ -15,40 +15,34 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
 
   const handleDirectoryPick = async () => {
     setError(null);
-    if (isPickerSupported && window.showDirectoryPicker) {
-        try {
-            const handle = await window.showDirectoryPicker({ mode: 'read' });
-            onDirectorySelected(handle);
-        } catch (err: any) {
-            if (err.name !== 'AbortError') setError("Could not open directory.");
-        }
-    } else {
-        // Fallback for Firefox
-        fileInputRef.current?.click();
+    if (!isPickerSupported) {
+      // Fallback for Firefox/Safari
+      fileInputRef.current?.click();
+      return;
+    }
+    
+    if (!window.showDirectoryPicker) {
+      setError("Your browser doesn't support the modern Folder Picker. Please use the fallback selector.");
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'read' });
+      onDirectorySelected(handle);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Error picking directory:", err);
+        setError("Could not open directory. Please check permissions and try again.");
+      }
     }
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (files && files.length > 0) {
-          onDirectorySelected(Array.from(files));
-      }
-  };
-
-  const traverseEntry = async (entry: any): Promise<File[]> => {
-      const files: File[] = [];
-      if (entry.isFile) {
-          const file = await new Promise<File>((resolve) => entry.file(resolve));
-          files.push(file);
-      } else if (entry.isDirectory) {
-          const reader = entry.createReader();
-          const entries = await new Promise<any[]>((resolve) => reader.readEntries(resolve));
-          for (const child of entries) {
-              const nestedFiles = await traverseEntry(child);
-              files.push(...nestedFiles);
-          }
-      }
-      return files;
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      onDirectorySelected(Array.from(files));
+    }
   };
 
   const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>) => {
@@ -60,69 +54,100 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({ onDirectorySelected,
     const items = event.dataTransfer.items;
     if (items && items.length > 0) {
       const item = items[0];
+      
+      // 1. Try modern File System Access API
       if (item.getAsFileSystemHandle) {
         try {
           const handle = await item.getAsFileSystemHandle();
-          if (handle?.kind === 'directory') onDirectorySelected(handle as FileSystemDirectoryHandle);
-          else setError('Please drop a folder.');
-        } catch (err) { setError('Access denied.'); }
-      } else if (item.webkitGetAsEntry) {
-          // Firefox Fallback for Drag and Drop
-          const entry = item.webkitGetAsEntry();
-          if (entry?.isDirectory) {
-              const files = await traverseEntry(entry);
-              onDirectorySelected(files);
-          } else {
-              setError('Please drop a folder.');
+          if (handle && handle.kind === 'directory') {
+            onDirectorySelected(handle as FileSystemDirectoryHandle);
+            return;
           }
-      } else {
-          setError("Your browser doesn't support folder selection.");
+        } catch (err) {
+          console.warn('Modern handle access failed, trying fallback...', err);
+        }
       }
+
+      // 2. Try webkitGetAsEntry (Firefox fallback)
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry();
+        if (entry && entry.isDirectory) {
+          // Since we can't easily convert a webkitEntry to a FileSystemDirectoryHandle 
+          // in a cross-browser way that works in workers, we use the DataTransfer's files.
+          const files = event.dataTransfer.files;
+          if (files.length > 0) {
+             onDirectorySelected(Array.from(files));
+             return;
+          }
+        }
+      }
+
+      setError('Please drop a single folder, not individual files.');
     }
   }, [onDirectorySelected]);
+  
+  const handleDragOver = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
+  const handleDragEnter = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  };
+  
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center p-8 max-w-2xl mx-auto">
         <h1 className="text-5xl font-bold text-brand-red mb-4 font-black tracking-tighter">Vault</h1>
-        <p className="text-xl text-gray-300 mb-8">Secure. Private. Offline. <br/> Works in Firefox too.</p>
+        <p className="text-xl text-gray-300 mb-8">Your personal media vault. <br/> Secure. Private. Offline.</p>
         
-        <input 
-            type="file" 
-            ref={fileInputRef} 
-            style={{ display: 'none' }} 
-            onChange={handleFileInputChange}
-            // @ts-ignore - webkitdirectory is non-standard but required for Firefox/Safari folder selection
-            webkitdirectory="true"
-        />
-
         <div
           onDrop={handleDrop}
-          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-          onDragEnter={() => setIsDragging(true)}
-          onDragLeave={() => setIsDragging(false)}
-          className={`border-4 border-dashed ${isDragging ? 'border-brand-red shadow-2xl shadow-brand-red-glow' : 'border-brand-light-gray'} rounded-2xl p-10 md:p-20 transition-all duration-300 bg-brand-gray/30`}
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          className={`border-4 border-dashed ${isDragging ? 'border-brand-red' : 'border-brand-light-gray'} rounded-2xl p-10 md:p-20 transition-all duration-300 bg-brand-gray/30 ${isDragging ? 'shadow-2xl shadow-brand-red-glow' : ''}`}
         >
           <div className="flex flex-col items-center justify-center space-y-4">
             <FolderIcon className="w-24 h-24 text-gray-400" />
-            <p className="text-lg text-gray-300">Drag & Drop a folder</p>
+            <p className="text-lg text-gray-300">Drag & Drop a folder to create your first library</p>
             <p className="text-gray-500">or</p>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleFileInputChange} 
+              className="hidden" 
+              // @ts-ignore
+              webkitdirectory="" 
+              directory=""
+            />
+            
             <button
               onClick={handleDirectoryPick}
               className="bg-brand-red text-white font-bold py-3 px-8 rounded-lg text-lg hover:bg-red-700 transition-colors"
             >
               Select Media Folder
             </button>
+            {!isPickerSupported && (
+              <p className="text-xs text-yellow-500/80 px-4 max-w-xs">
+                Note: In Firefox, libraries may not persist after a page refresh. For the full "Vault" experience, we recommend Chrome or Edge.
+              </p>
+            )}
           </div>
         </div>
-
-        {!isPickerSupported && (
-          <p className="text-blue-400 mt-4 text-sm max-w-sm mx-auto">
-            Vault is running in <strong>Compatibility Mode</strong>. Your library will be saved, but re-scanning requires re-selecting the folder.
-          </p>
-        )}
         
-        {error && <p className="text-red-500 mt-4 bg-red-900/50 p-3 rounded-lg">{error}</p>}
+        {error && (
+          <p className="text-red-500 mt-4 bg-red-900/50 p-3 rounded-lg">{error}</p>
+        )}
       </div>
     </div>
   );
