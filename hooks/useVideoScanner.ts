@@ -2,8 +2,6 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { MediaDB, VideoFile } from '../services/db';
 
-// This worker is used for heavy-duty recursion only when showDirectoryPicker is available (Chrome/Edge).
-// For Firefox, we use the main-thread discovery to avoid "dead" File reference issues.
 const workerCode = `
   const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'ts', 'm2ts', 'mpg'];
   const SUBTITLE_EXTENSIONS = ['srt', 'vtt'];
@@ -13,7 +11,7 @@ const workerCode = `
         if (handle.kind === 'file') {
             yield { handle, path: [handle.name] };
         } else if (handle.kind === 'directory') {
-            if (handle.name.startsWith('.')) continue;
+            if (handle.name.startsWith('.')) continue; // Ignore hidden folders
             for await (const { handle: nestedHandle, path: nestedPath } of getFileHandlesRecursively(handle)) {
                 yield { handle: nestedHandle, path: [handle.name, ...nestedPath] };
             }
@@ -23,16 +21,20 @@ const workerCode = `
 
   self.onmessage = async (event) => {
     const { dirHandle, libraryId, existingPaths } = event.data;
-    const existingPathsSet = new Set(existingPaths || []);
+    const isRefresh = Array.isArray(existingPaths);
+    const existingPathsSet = new Set(existingPaths);
     const mediaFilesMap = new Map();
 
+    postMessage({ type: 'progress', payload: { progress: 0, message: 'Discovering files...' } });
+    
     try {
         for await (const { handle, path } of getFileHandlesRecursively(dirHandle)) {
             const fileName = handle.name;
-            const parts = fileName.split('.');
-            const extension = parts.length > 1 ? parts.pop().toLowerCase() : '';
+            if (fileName.startsWith('.')) continue;
+
+            const extension = fileName.split('.').pop().toLowerCase();
             const fullPath = path.join('/');
-            const fileKey = fullPath.includes('.') ? fullPath.substring(0, fullPath.lastIndexOf('.')) : fullPath;
+            const fileKey = fullPath.substring(0, fullPath.lastIndexOf('.'));
 
             if (VIDEO_EXTENSIONS.includes(extension)) {
                 const entry = mediaFilesMap.get(fileKey) || { subtitles: [] };
@@ -45,213 +47,244 @@ const workerCode = `
                 mediaFilesMap.set(fileKey, entry);
             }
         }
-        
-        const discovered = Array.from(mediaFilesMap.values()).filter(v => v.mediaHandle);
-        const newEntries = discovered.filter(entry => !existingPathsSet.has(entry.path.join('/')));
-        
-        postMessage({ type: 'discovered', payload: newEntries, libraryId });
     } catch (e) {
-        postMessage({ type: 'error', payload: e.message });
+        console.error('Error scanning directory:', e);
+        postMessage({ type: 'error', payload: 'Failed to read directory contents. Check permissions.' });
+        return;
+    }
+    
+    const discoveredEntries = Array.from(mediaFilesMap.values()).filter(v => v.mediaHandle);
+
+    if (isRefresh) {
+        const discoveredPaths = new Set(discoveredEntries.map(entry => entry.path.join('/')));
+        const deletedPaths = existingPaths.filter(path => !discoveredPaths.has(path));
+
+        if (deletedPaths.length > 0) {
+            postMessage({ type: 'deleted_paths', payload: deletedPaths, libraryId });
+        }
+    }
+    
+    const newEntries = isRefresh 
+        ? discoveredEntries.filter(entry => !existingPathsSet.has(entry.path.join('/')))
+        : discoveredEntries;
+
+    if (newEntries.length > 0) {
+        postMessage({ type: 'discovered', payload: newEntries, libraryId });
+    } else if (discoveredEntries.length === 0) {
+        postMessage({ type: 'progress', payload: { progress: 100, message: 'No new video files found.' } });
+        postMessage({ type: 'complete', payload: null });
+    } else if (isRefresh) {
+        postMessage({ type: 'progress', payload: { progress: 100, message: 'Library is up to date.' } });
+        postMessage({ type: 'complete', payload: null });
     }
   };
 `;
 
 export const useVideoScanner = (onUpdate: (update: { type: string; payload: any }) => void) => {
   const workerRef = useRef<Worker | null>(null);
-  const isScanningRef = useRef(false);
+  const libraryIdRef = useRef<string | null>(null);
+  const priorityQueueRef = useRef<VideoFile[]>([]);
+  const queuedPriorityPathsRef = useRef<Set<string>>(new Set());
   const updatesAccumulatorRef = useRef<VideoFile[]>([]);
-  const db = new MediaDB();
+  
+  const prioritizeMedia = useCallback((media: VideoFile) => {
+    // Only prioritize if it's unprocessed and not already in the priority queue
+    if (media.isPlayable === undefined && !queuedPriorityPathsRef.current.has(media.fullPath)) {
+        priorityQueueRef.current.push(media);
+        queuedPriorityPathsRef.current.add(media.fullPath);
+    }
+  }, []);
 
-  const VIDEO_EXTENSIONS = ['mp4', 'mkv', 'mov', 'webm', 'm4v', 'ts', 'm2ts', 'mpg'];
-  const SUBTITLE_EXTENSIONS = ['srt', 'vtt'];
-
-  const processVideo = async (videoFile: VideoFile): Promise<VideoFile | null> => {
-    const video = document.createElement('video');
-    video.muted = true;
-    video.crossOrigin = "anonymous";
-    video.preload = 'metadata';
+  const processMediaQueue = useCallback(async (mediaToProcess: VideoFile[]) => {
+    if (mediaToProcess.length === 0) {
+        onUpdate({ type: 'complete', payload: null });
+        return;
+    }
     
-    try {
-        let file: File;
-        if (typeof FileSystemHandle !== 'undefined' && videoFile.fileHandle instanceof FileSystemHandle) {
-          file = await (videoFile.fileHandle as FileSystemFileHandle).getFile();
-        } else {
-          file = videoFile.fileHandle as unknown as File;
-        }
+    const db = new MediaDB();
+    const regularQueue = [...mediaToProcess];
+    const totalCount = regularQueue.length;
+    let processedCount = 0;
 
-        if (file.size === 0 && file.name !== "") return { ...videoFile, isPlayable: false };
+    onUpdate({ type: 'progress', payload: { progress: 0, message: `Processing ${totalCount} files...` } });
 
-        return await new Promise<VideoFile>((resolve) => {
-            const objectUrl = URL.createObjectURL(file);
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            const cleanup = () => { URL.revokeObjectURL(objectUrl); video.removeAttribute('src'); video.load(); video.remove(); canvas.remove(); };
-            const timeout = setTimeout(() => { cleanup(); resolve({ ...videoFile, isPlayable: false }); }, 5000);
+    const MAX_CONCURRENT_PROCESSORS = Math.max(2, (navigator.hardwareConcurrency || 4) - 1);
+    const BATCH_SIZE = 50;
 
-            video.onloadedmetadata = () => {
-                video.currentTime = Math.min(video.duration * 0.1, 5);
-            };
-
-            video.onseeked = () => {
-                clearTimeout(timeout);
-                if (ctx && video.videoWidth > 0) {
+    const processVideo = async (videoFile: VideoFile): Promise<VideoFile | null> => {
+        const video = document.createElement('video');
+        video.muted = true;
+        video.crossOrigin = "anonymous";
+        video.preload = 'metadata';
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        try {
+            const file = await videoFile.fileHandle.getFile();
+            const result = await new Promise<{
+                metadata: { duration: number; width: number; height: number } | null;
+                poster: Blob | null;
+                isError?: boolean;
+                errorDetails?: { code?: number; message?: string };
+            }>((resolve) => {
+                const objectUrl = URL.createObjectURL(file);
+                video.src = objectUrl;
+                const cleanup = () => { URL.revokeObjectURL(objectUrl); video.removeAttribute('src'); video.load(); };
+                const timeoutId = setTimeout(() => { cleanup(); resolve({ metadata: null, poster: null, isError: true, errorDetails: { message: 'Processing timed out after 10 seconds.' } }); }, 10000);
+                let metadataResult: { duration: number; width: number; height: number } | null = null;
+                video.onloadedmetadata = () => { metadataResult = { duration: video.duration, width: video.videoWidth, height: video.videoHeight }; };
+                video.onseeked = () => {
+                    if (!ctx || video.videoWidth === 0) { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null }); return; }
                     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-                    ctx.drawImage(video, 0, 0);
-                    canvas.toBlob((blob) => {
-                        const result = {
-                            ...videoFile,
-                            duration: video.duration,
-                            width: video.videoWidth,
-                            height: video.videoHeight,
-                            poster: blob || undefined,
-                            isPlayable: true
-                        };
-                        cleanup();
-                        resolve(result);
-                    }, 'image/jpeg', 0.7);
-                } else {
-                    cleanup(); resolve({ ...videoFile, isPlayable: true });
-                }
-            };
+                    ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+                    canvas.toBlob((blob) => { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: blob }); }, 'image/jpeg', 0.8);
+                };
+                video.onloadeddata = () => {
+                    if (!isFinite(video.duration) || video.duration <= 0) { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null }); return; }
+                    video.currentTime = isFinite(video.duration * 0.1) ? video.duration * 0.1 : 0;
+                };
+                video.onerror = () => {
+                    const errorDetails = { code: video.error?.code, message: video.error?.message };
+                    clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null, isError: true, errorDetails }); 
+                };
+            });
 
-            video.onerror = () => { clearTimeout(timeout); cleanup(); resolve({ ...videoFile, isPlayable: false }); };
-            video.src = objectUrl;
-        });
-    } catch (e) {
-        return { ...videoFile, isPlayable: false };
-    }
-  };
-
-  const processMediaQueue = async (mediaFiles: VideoFile[]) => {
-    isScanningRef.current = true;
-    const total = mediaFiles.length;
-    let count = 0;
-
-    for (const item of mediaFiles) {
-      if (!isScanningRef.current) break;
-      const processed = await processVideo(item);
-      if (processed) {
-        await db.addMedia(processed);
-        updatesAccumulatorRef.current.push(processed);
-        if (updatesAccumulatorRef.current.length >= 10) {
-          onUpdate({ type: 'update_files', payload: [...updatesAccumulatorRef.current] });
-          updatesAccumulatorRef.current = [];
+            return { 
+                ...videoFile, 
+                poster: result.poster ?? undefined, 
+                duration: result.metadata?.duration, 
+                width: result.metadata?.width, 
+                height: result.metadata?.height, 
+                size: file.size, 
+                lastModified: file.lastModified, 
+                isPlayable: !result.isError,
+                unsupportedReason: result.errorDetails,
+             };
+        } finally {
+            video.remove();
+            canvas.remove();
         }
-      }
-      count++;
-      onUpdate({ type: 'progress', payload: { progress: (count / total) * 100, message: `Processing ${count}/${total}...` } });
-    }
+    };
 
+    const workerTask = async () => {
+        while (priorityQueueRef.current.length > 0 || regularQueue.length > 0) {
+            const media = priorityQueueRef.current.shift() || regularQueue.shift();
+            if (media) {
+                if(queuedPriorityPathsRef.current.has(media.fullPath)) {
+                    queuedPriorityPathsRef.current.delete(media.fullPath);
+                }
+                const processedMedia = await processVideo(media);
+                if (processedMedia) {
+                  await db.addMedia(processedMedia);
+                  updatesAccumulatorRef.current.push(processedMedia);
+                }
+                
+                processedCount++;
+                
+                if (updatesAccumulatorRef.current.length >= BATCH_SIZE) {
+                  onUpdate({ type: 'update_files', payload: [...updatesAccumulatorRef.current] });
+                  updatesAccumulatorRef.current = [];
+                }
+                onUpdate({ type: 'progress', payload: { progress: (processedCount / totalCount) * 100, message: `Processing... (${processedCount}/${totalCount})` } });
+            }
+        }
+    };
+
+    await Promise.all(Array.from({ length: MAX_CONCURRENT_PROCESSORS }, () => workerTask()));
+
+    // Flush any remaining updates
     if (updatesAccumulatorRef.current.length > 0) {
       onUpdate({ type: 'update_files', payload: [...updatesAccumulatorRef.current] });
       updatesAccumulatorRef.current = [];
     }
+
     onUpdate({ type: 'complete', payload: null });
-    isScanningRef.current = false;
-  };
-
-  const scanMainThread = async (files: File[], libraryId: string, existingPaths: string[]) => {
-    onUpdate({ type: 'progress', payload: { progress: 0, message: 'Analyzing local files...' } });
-    const existingPathsSet = new Set(existingPaths);
-    const mediaFilesMap = new Map();
-
-    for (const file of files) {
-        const fullPath = file.webkitRelativePath || file.name;
-        const parts = fullPath.split('/').filter(p => p !== '');
-        const pathSegments = parts.length > 1 ? parts.slice(1) : parts;
-        const fileName = pathSegments[pathSegments.length - 1];
-        const ext = fileName.split('.').pop()?.toLowerCase() || '';
-        const fileKey = pathSegments.join('/').replace(/\.[^/.]+$/, "");
-
-        if (VIDEO_EXTENSIONS.includes(ext)) {
-            const entry = mediaFilesMap.get(fileKey) || { subtitles: [] };
-            entry.mediaHandle = file;
-            entry.path = pathSegments;
-            mediaFilesMap.set(fileKey, entry);
-        } else if (SUBTITLE_EXTENSIONS.includes(ext)) {
-            const entry = mediaFilesMap.get(fileKey) || { subtitles: [] };
-            entry.subtitles.push(file);
-            mediaFilesMap.set(fileKey, entry);
-        }
-    }
-
-    const discovered = Array.from(mediaFilesMap.values()).filter((v: any) => v.mediaHandle);
-    const newItems = discovered.filter((entry: any) => !existingPathsSet.has(entry.path.join('/')));
-    
-    if (newItems.length > 0) {
-        const now = Date.now();
-        const initial = newItems.map((item: any): VideoFile => ({
-            libraryId,
-            fullPath: item.path.join('/'),
-            name: item.mediaHandle.name,
-            parentPath: item.path.slice(0, -1).join('/'),
-            fileHandle: item.mediaHandle,
-            isFavorite: false,
-            tags: [],
-            subtitles: item.subtitles.map((s: File) => ({ name: s.name, lang: 'en', fileHandle: s })),
-            size: item.mediaHandle.size,
-            lastModified: item.mediaHandle.lastModified,
-            dateAdded: now
-        }));
-        await db.addManyManyMedia(initial);
-        processMediaQueue(initial);
-    } else {
-        onUpdate({ type: 'complete', payload: null });
-    }
-  };
-
-  const handleWorkerMessage = useCallback(async (event: MessageEvent) => {
-    const { type, payload, libraryId } = event.data;
-    if (type === 'discovered') {
-      const now = Date.now();
-      const initial = payload.map((item: any): VideoFile => ({
-        libraryId,
-        fullPath: item.path.join('/'),
-        name: item.mediaHandle.name,
-        parentPath: item.path.slice(0, -1).join('/'),
-        fileHandle: item.mediaHandle,
-        isFavorite: false,
-        tags: [],
-        subtitles: item.subtitles.map((s: any) => ({ name: s.name, lang: 'en', fileHandle: s })),
-        size: item.mediaHandle.size || 0,
-        lastModified: item.mediaHandle.lastModified || 0,
-        dateAdded: now
-      }));
-      await db.addManyManyMedia(initial);
-      processMediaQueue(initial);
-    } else if (type === 'error') {
-      onUpdate({ type: 'error', payload });
-    }
   }, [onUpdate]);
 
+  const handleWorkerMessage = useCallback(async (event: MessageEvent) => {
+    const { type, payload, libraryId: msgLibraryId } = event.data;
+    const libraryId = msgLibraryId || libraryIdRef.current;
+    if (!libraryId) {
+        console.error("Scanner message received without libraryId.");
+        return;
+    }
+    const db = new MediaDB();
+
+    switch (type) {
+      case 'progress':
+        onUpdate({ type, payload });
+        break;
+      case 'deleted_paths':
+        await db.deleteMediaByPath(libraryId, payload);
+        onUpdate({ type: 'deleted_files', payload });
+        break;
+      case 'discovered':
+        const now = Date.now();
+        const initialMedia = payload.map((item: any): VideoFile => {
+            const { mediaHandle, subtitles: subtitleHandles, path } = item;
+            const fullPath = path.join('/');
+            
+            return {
+              libraryId,
+              fullPath,
+              name: mediaHandle.name,
+              parentPath: path.slice(0, -1).join('/'),
+              fileHandle: mediaHandle,
+              isFavorite: false,
+              tags: [],
+              subtitles: (subtitleHandles || []).map((subHandle: FileSystemFileHandle) => {
+                  const langMatch = subHandle.name.match(/\.([a-zA-Z]{2,3})\.(srt|vtt)$/i);
+                  const lang = langMatch ? langMatch[1].toLowerCase() : 'en';
+                  return { name: subHandle.name, lang, fileHandle: subHandle };
+              }),
+              size: 0,
+              lastModified: 0,
+              dateAdded: now,
+            };
+        });
+        
+        await db.addManyMedia(initialMedia);
+        // Do not add to UI until processed to avoid glitchy refreshes.
+        // The processing queue will send 'update_files' messages.
+        processMediaQueue(initialMedia);
+        break;
+      case 'error':
+        onUpdate({ type, payload });
+        break;
+    }
+  }, [onUpdate, processMediaQueue]);
+
   useEffect(() => {
-    if (typeof Worker !== 'undefined') {
+    try {
         const blob = new Blob([workerCode], { type: 'application/javascript' });
         const worker = new Worker(URL.createObjectURL(blob));
         worker.onmessage = handleWorkerMessage;
         workerRef.current = worker;
-        return () => worker.terminate();
+        return () => {
+            worker.terminate();
+        }
+    } catch(e) {
+        console.error("Failed to create worker", e);
     }
   }, [handleWorkerMessage]);
 
-  const startScan = useCallback((dirHandle: FileSystemDirectoryHandle | File[] | null, libraryId: string, existingMedia: VideoFile[] = []) => {
-    const existingPaths = existingMedia.map(v => v.fullPath);
-    if (Array.isArray(dirHandle)) {
-        scanMainThread(dirHandle, libraryId, existingPaths);
-    } else if (dirHandle && workerRef.current) {
-        workerRef.current.postMessage({ dirHandle, libraryId, existingPaths });
-    } else {
-        onUpdate({ type: 'complete', payload: null });
+  const startScan = useCallback((dirHandle: FileSystemDirectoryHandle, libraryId: string, existingMedia: VideoFile[] = []) => {
+    if (workerRef.current) {
+      libraryIdRef.current = libraryId;
+      const existingPaths = existingMedia.map(v => v.fullPath);
+      workerRef.current.postMessage({ dirHandle, libraryId, existingPaths });
     }
-  }, [onUpdate]);
+  }, []);
 
   const startProcessingUnprocessed = useCallback(async (libraryId: string) => {
-    const all = await db.getAllMedia(libraryId);
-    const unprocessed = all.filter(v => v.isPlayable === undefined);
-    if (unprocessed.length > 0) processMediaQueue(unprocessed);
-    else onUpdate({ type: 'complete', payload: null });
-  }, [onUpdate]);
+    const db = new MediaDB();
+    const allMedia = await db.getAllMedia(libraryId);
+    const unprocessed = allMedia.filter(v => v.isPlayable === undefined);
+    if (unprocessed.length > 0) {
+        console.log(`Resuming processing for ${unprocessed.length} files.`);
+        processMediaQueue(unprocessed);
+    }
+  }, [processMediaQueue]);
 
-  return { startScan, startProcessingUnprocessed, prioritizeMedia: () => {} };
+  return { startScan, startProcessingUnprocessed, prioritizeMedia };
 };

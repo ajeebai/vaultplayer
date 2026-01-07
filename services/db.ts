@@ -6,7 +6,7 @@ export interface MediaFile {
   fullPath: string;
   name: string;
   parentPath: string;
-  fileHandle: FileSystemFileHandle | File;
+  fileHandle: FileSystemFileHandle;
   size: number;
   lastModified: number;
   isFavorite?: boolean;
@@ -22,7 +22,7 @@ export interface VideoFile extends MediaFile {
   height?: number;
   playbackPosition?: number;
   lastWatched?: Date;
-  subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle | File }[];
+  subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle }[];
   isPlayable?: boolean;
   unsupportedReason?: {
     code?: number;
@@ -30,17 +30,18 @@ export interface VideoFile extends MediaFile {
   };
 }
 
+// Internal types for DB stores
 interface LibraryVideo {
   libraryId: string;
   fullPath: string;
   name: string;
   parentPath: string;
-  fileHandle: FileSystemFileHandle | File;
+  fileHandle: FileSystemFileHandle;
   size: number;
   lastModified: number;
   playbackPosition?: number;
   lastWatched?: Date;
-  subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle | File }[];
+  subtitles: { name: string; lang: string; fileHandle: FileSystemFileHandle }[];
   isPlayable?: boolean;
   unsupportedReason?: {
     code?: number;
@@ -69,6 +70,7 @@ const METADATA_STORE_NAME = 'media_metadata';
 const STATE_STORE_NAME = 'app_state';
 
 const generateMediaKey = (media: { name: string, size: number, lastModified: number }): string => {
+  // Use file name, size, and last modified date to create a unique enough key for content identification.
   return `${media.name}|${media.size}|${media.lastModified}`;
 };
 
@@ -80,24 +82,29 @@ export class MediaDB {
       upgrade(db, oldVersion) {
         const v3StoreName = 'videos';
 
+        // From v1 to v2: create 'videos' store
         if (oldVersion < 2 && !db.objectStoreNames.contains(v3StoreName)) {
             db.createObjectStore(v3StoreName, { keyPath: 'fullPath' });
         }
+        // Always ensure app_state store exists
         if (!db.objectStoreNames.contains(STATE_STORE_NAME)) {
             db.createObjectStore(STATE_STORE_NAME);
         }
+        // From v2 to v3: change 'videos' store keypath, which is destructive
         if (oldVersion < 3) {
             if(db.objectStoreNames.contains(v3StoreName)) {
                 db.deleteObjectStore(v3StoreName);
             }
             db.createObjectStore(v3StoreName, { keyPath: ['libraryId', 'fullPath'] });
         }
+        // From v3 to v4: split 'videos' into 'library_videos' and 'media_metadata', also destructive
         if (oldVersion < 4) {
             if(db.objectStoreNames.contains(v3StoreName)) {
                 db.deleteObjectStore(v3StoreName);
             }
             if(!db.objectStoreNames.contains(VIDEO_STORE_NAME)){
                 const store = db.createObjectStore(VIDEO_STORE_NAME, { keyPath: ['libraryId', 'fullPath'] });
+                // Add an index on mediaKey if it doesn't exist. This is for v4 migration.
                 if (!store.indexNames.contains('mediaKey')) {
                     store.createIndex('mediaKey', 'mediaKey', { unique: false });
                 }
@@ -106,6 +113,7 @@ export class MediaDB {
                 db.createObjectStore(METADATA_STORE_NAME, { keyPath: 'mediaKey' });
             }
         }
+        // v5 removed collections, no schema change needed, but old migration code is removed.
       },
     });
   }
@@ -137,7 +145,8 @@ export class MediaDB {
 
     const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
     libraryMedia.mediaKey = mediaKey;
-    (libraryMedia as LibraryVideo).dateAdded = existingVideo?.dateAdded || media.dateAdded || Date.now();
+    // Preserve the original added date when updating metadata
+    (libraryMedia as LibraryVideo).dateAdded = existingVideo?.dateAdded;
 
     const existingMetadata = await metadataStore.get(mediaKey) as MediaMetadata | undefined;
     
@@ -147,7 +156,9 @@ export class MediaDB {
         duration: duration ?? existingMetadata?.duration,
         width: width ?? existingMetadata?.width,
         height: height ?? existingMetadata?.height,
+        // Prioritize incoming tags, but fall back to existing to preserve user edits.
         tags: tags ?? existingMetadata?.tags ?? [],
+        // Preserve existing favorite status unless a new one is provided.
         isFavorite: isFavorite ?? existingMetadata?.isFavorite ?? false,
         isHidden: isHidden ?? existingMetadata?.isHidden ?? false,
     };
@@ -158,38 +169,31 @@ export class MediaDB {
     await tx.done;
   }
 
-  // Same as addManyMedia but with a more descriptive name and ensuring dateAdded is set
-  async addManyManyMedia(mediaFiles: VideoFile[]): Promise<void> {
+  async addManyMedia(mediaFiles: VideoFile[]): Promise<void> {
     const db = await this.dbPromise;
     const tx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
     const videoStore = tx.objectStore(VIDEO_STORE_NAME);
     const metadataStore = tx.objectStore(METADATA_STORE_NAME);
-    const now = Date.now();
     
     for (const media of mediaFiles) {
         const mediaKey = generateMediaKey(media);
         const { poster, duration, width, height, tags, isFavorite, isHidden, ...libraryData } = media;
         
-        const libraryMedia: LibraryVideo = {
-            ...(libraryData as LibraryVideo),
-            mediaKey,
-            dateAdded: media.dateAdded || now
-        };
+        const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
+        libraryMedia.mediaKey = mediaKey;
 
         await videoStore.put(libraryMedia);
 
+        // Add a skeleton metadata object to ensure data consistency from the start.
+        // This prevents a race condition where a video exists in one store but not the other.
         const existingMeta = await metadataStore.get(mediaKey);
         if (!existingMeta) {
-            const skeletonMetadata: MediaMetadata = { mediaKey, tags: [], isFavorite: false, isHidden: false };
+            const skeletonMetadata: MediaMetadata = { mediaKey };
             await metadataStore.put(skeletonMetadata);
         }
     }
     
     await tx.done;
-  }
-
-  async addManyMedia(mediaFiles: VideoFile[]): Promise<void> {
-    return this.addManyManyMedia(mediaFiles);
   }
 
   async getMedia(libraryId: string, fullPath: string): Promise<VideoFile | undefined> {
@@ -254,14 +258,19 @@ export class MediaDB {
     const videoStore = tx.objectStore(VIDEO_STORE_NAME);
     const metadataStore = tx.objectStore(METADATA_STORE_NAME);
 
+    // Use `any` to access potentially stale `isFavorite` property for migration
     const media = await videoStore.get([libraryId, fullPath]) as any;
     
     if (media) {
       const metadata = (await metadataStore.get(media.mediaKey) || { mediaKey: media.mediaKey }) as MediaMetadata;
+      
+      // For backward compatibility, check old location if new one is not set
       const currentIsFavorite = metadata.isFavorite ?? media.isFavorite ?? false;
       metadata.isFavorite = !currentIsFavorite;
+      
       await metadataStore.put(metadata);
 
+      // If the old property exists, remove it to complete migration for this item
       if (media.isFavorite !== undefined) {
         delete media.isFavorite;
         await videoStore.put(media);
@@ -285,8 +294,11 @@ export class MediaDB {
     
     if (media) {
       const metadata = (await metadataStore.get(media.mediaKey) || { mediaKey: media.mediaKey }) as MediaMetadata;
+      
       metadata.isHidden = !metadata.isHidden;
+      
       await metadataStore.put(metadata);
+      
       await tx.done;
       return {...media, ...metadata } as VideoFile;
     }
@@ -306,6 +318,7 @@ export class MediaDB {
         const metadata = (await metadataStore.get(media.mediaKey) || { mediaKey: media.mediaKey }) as MediaMetadata;
         metadata.tags = tags;
         await metadataStore.put(metadata);
+
         await tx.done;
         return { ...media, ...metadata } as VideoFile;
     }
@@ -323,6 +336,7 @@ export class MediaDB {
   async clearMedia(libraryId?: string): Promise<void> {
     const db = await this.dbPromise;
     if (libraryId) {
+        // Get all video records to extract media keys.
         const videoTx = db.transaction(VIDEO_STORE_NAME, 'readonly');
         const videoStore = videoTx.objectStore(VIDEO_STORE_NAME);
         const range = IDBKeyRange.bound([libraryId, ''], [libraryId, '\uffff']);
@@ -330,7 +344,10 @@ export class MediaDB {
         const mediaKeys = [...new Set(videosInLibrary.map(v => v.mediaKey))];
         await videoTx.done;
         
+        // Use a single transaction to delete from all related stores.
         const deleteTx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
+        
+        // Delete videos
         const videoStoreWrite = deleteTx.objectStore(VIDEO_STORE_NAME);
         let videoCursor = await videoStoreWrite.openCursor(range);
         while (videoCursor) {
@@ -338,6 +355,7 @@ export class MediaDB {
             videoCursor = await videoCursor.continue();
         }
 
+        // Delete metadata
         const metadataStoreWrite = deleteTx.objectStore(METADATA_STORE_NAME);
         for (const key of mediaKeys) {
             metadataStoreWrite.delete(key);
@@ -363,6 +381,7 @@ export class MediaDB {
         const media = cursor.value;
         if (media.playbackPosition) {
             const updatedMedia = { ...media };
+            // Using delete is cleaner than setting to undefined for IDB Object stores
             delete updatedMedia.playbackPosition;
             delete updatedMedia.lastWatched;
             cursor.update(updatedMedia);

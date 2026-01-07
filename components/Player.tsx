@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VideoFile, MediaDB } from '../services/db';
 import { formatDuration } from '../utils/formatters';
@@ -405,10 +404,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         setTimeout(() => {
             const newTracks = videoRef.current?.textTracks;
             if (newTracks) {
-                // Explicitly cast each track to TextTrack to fix type error
-                for(let i = 0; i < newTracks.length; i++) (newTracks[i] as TextTrack).mode = 'hidden';
-                // Cast Array.from result to TextTrack[] to ensure properties like 'label' are accessible
-                const newTrack = (Array.from(newTracks) as TextTrack[]).find(t => t.label === file.name);
+                for(let i = 0; i < newTracks.length; i++) newTracks[i].mode = 'hidden';
+                const newTrack = Array.from(newTracks).find(t => t.label === file.name);
                 if (newTrack) { newTrack.mode = 'showing'; setActiveTrackLabel(file.name); }
             }
         }, 100);

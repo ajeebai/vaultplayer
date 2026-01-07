@@ -1,4 +1,3 @@
-
 import { VideoFile } from './services/db';
 
 export enum View {
@@ -22,7 +21,7 @@ export interface AppState {
 export interface LibraryInfo {
   id: string;
   name: string;
-  handle: FileSystemDirectoryHandle | File[];
+  handle: FileSystemDirectoryHandle;
 }
 
 export interface CategoryNode {
@@ -32,6 +31,7 @@ export interface CategoryNode {
   media: VideoFile[];
 }
 
+// Fix: Add missing Collection type to resolve a compilation error in components/AddToCollectionModal.tsx.
 export interface Collection {
   id: string;
   name: string;
