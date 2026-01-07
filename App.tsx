@@ -343,7 +343,7 @@ const App: React.FC = () => {
       return;
     }
 
-    const hasPermission = await verifyPermission(activeLibrary.handle, false);
+    const hasPermission = await verifyPermission(activeLibrary.handle, true);
 
     if (hasPermission) {
       setPlaylist(playlist);
@@ -380,7 +380,7 @@ const App: React.FC = () => {
       return;
     }
     
-    const hasPermission = await verifyPermission(activeLibrary.handle, false);
+    const hasPermission = await verifyPermission(activeLibrary.handle, true);
 
     if (hasPermission) {
       setAppState(prev => ({ ...prev, view: View.Player, currentlyViewing: videoFile }));
@@ -470,7 +470,7 @@ const App: React.FC = () => {
 
     setIsManageOpen(false);
 
-    const hasPermission = await verifyPermission(library.handle, false);
+    const hasPermission = await verifyPermission(library.handle, true);
     if (!hasPermission) {
         alert(`Vault does not have permission to access "${library.name}".\n\nThis can happen after a browser restart or if the app is running in a restricted context (like an iframe).\n\nPlease try adding the library again to re-grant access.`);
         return;

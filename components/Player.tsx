@@ -387,7 +387,8 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
     if (videoRef.current) {
       const tracks = videoRef.current.textTracks;
       for (let i = 0; i < tracks.length; i++) {
-        tracks[i].mode = tracks[i].label === label ? 'showing' : 'hidden';
+        const track = tracks[i] as TextTrack;
+        track.mode = track.label === label ? 'showing' : 'hidden';
       }
       setActiveTrackLabel(label);
     }
@@ -404,9 +405,12 @@ export const Player: React.FC<PlayerProps> = ({ video, on_close, allVideos, play
         setTimeout(() => {
             const newTracks = videoRef.current?.textTracks;
             if (newTracks) {
-                for(let i = 0; i < newTracks.length; i++) newTracks[i].mode = 'hidden';
-                const newTrack = Array.from(newTracks).find(t => t.label === file.name);
-                if (newTrack) { newTrack.mode = 'showing'; setActiveTrackLabel(file.name); }
+                for(let i = 0; i < newTracks.length; i++) {
+                   const t = newTracks[i] as TextTrack;
+                   t.mode = 'hidden';
+                }
+                const newTrack = Array.from(newTracks).find((t: any) => t.label === file.name);
+                if (newTrack) { (newTrack as TextTrack).mode = 'showing'; setActiveTrackLabel(file.name); }
             }
         }, 100);
         setIsSubtitleMenuOpen(false);
