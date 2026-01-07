@@ -183,29 +183,50 @@ const App: React.FC = () => {
       case 'complete':
         setAppState(prev => ({ ...prev, isLoading: false, progress: 100, progressMessage: 'Ready!' }));
         break;
+      case 'error':
+        setAppState(prev => ({ ...prev, isLoading: false, progress: 0, progressMessage: 'Error: ' + update.payload }));
+        break;
     }
   }, []));
 
   const loadLibrary = useCallback(async (library: LibraryInfo) => {
-    setAppState(prev => ({...prev, view: View.Loading, isLoading: true, media: [], progress: 0, progressMessage: ''}));
+    setAppState(prev => ({...prev, view: View.Loading, isLoading: true, media: [], progress: 0, progressMessage: 'Authenticating...'}));
     setActiveLibrary(library);
     await db.setAppState('activeLibraryId', library.id);
 
-    // SAFE PERMISSION CHECK FOR FIREFOX:
+    // Permission check
     const hasPermission = await verifyPermission(library.handle, false);
     
+    // Detection of "Dead Handles" for Firefox persistence issues
+    if (!hasPermission && !isPickerSupported) {
+        // In browsers without FS Access API, libraries cannot be refreshed after a page reload
+        // We provide a grace period where we show cached metadata, but warn the user.
+        const mediaFiles = await db.getAllMedia(library.id);
+        if (mediaFiles.length > 0) {
+            setAppState(prev => ({ 
+                ...prev, 
+                media: mediaFiles, 
+                view: View.Library, 
+                isLoading: false, 
+                progressMessage: 'Session expired. Metadata is cached, but files cannot be played until folder is re-selected.' 
+            }));
+            return;
+        }
+    }
+
     const mediaFiles = await db.getAllMedia(library.id);
     if (mediaFiles.length > 0) {
       setAppState(prev => ({ ...prev, media: mediaFiles, view: View.Library, isLoading: false }));
-      startProcessingUnprocessed(library.id);
+      if (hasPermission) {
+          startProcessingUnprocessed(library.id);
+      }
     } else if (hasPermission) {
       setAppState(prev => ({ ...prev, view: View.Library, isLoading: true, progressMessage: 'Scanning...' }));
       startScan(library.handle, library.id);
     } else {
-       // If no permission and no cached media, we have to show the welcome or a prompt
        setAppState(prev => ({ ...prev, view: View.Welcome, isLoading: false }));
     }
-  }, [db, startScan, startProcessingUnprocessed]);
+  }, [db, startScan, startProcessingUnprocessed, isPickerSupported]);
 
   useEffect(() => {
     setIsPickerSupported('showDirectoryPicker' in window);
@@ -230,7 +251,7 @@ const App: React.FC = () => {
     setSelectedCategoryPath(null);
     setSelectedTag(null);
   
-    let name = Array.isArray(handle) ? "Imported Library" : handle.name;
+    let name = Array.isArray(handle) ? (handle.length > 0 ? (handle[0] as File).webkitRelativePath.split('/')[0] || "Imported Library" : "Imported Library") : handle.name;
     let newLibrary: LibraryInfo = { id: crypto.randomUUID(), name, handle };
 
     const updatedLibraries = [newLibrary, ...libraries.filter(l => l.id !== newLibrary.id)].slice(0, 5);
