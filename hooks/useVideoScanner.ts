@@ -29,14 +29,15 @@ const workerCode = `
     
     try {
         if (dirHandle) {
-            // Modern File System Access API path
+            // Modern File System Access API path (Chrome/Edge)
             for await (const { handle, path } of getFileHandlesRecursively(dirHandle)) {
                 const fileName = handle.name;
                 if (fileName.startsWith('.')) continue;
 
-                const extension = fileName.split('.').pop().toLowerCase();
+                const parts = fileName.split('.');
+                const extension = parts.length > 1 ? parts.pop().toLowerCase() : '';
                 const fullPath = path.join('/');
-                const fileKey = fullPath.substring(0, fullPath.lastIndexOf('.'));
+                const fileKey = fullPath.includes('.') ? fullPath.substring(0, fullPath.lastIndexOf('.')) : fullPath;
 
                 if (VIDEO_EXTENSIONS.includes(extension)) {
                     const entry = mediaFilesMap.get(fileKey) || { subtitles: [] };
@@ -50,23 +51,27 @@ const workerCode = `
                 }
             }
         } else if (files) {
-            // Legacy / Firefox path (FileList converted to Array of objects)
+            // Legacy / Firefox path (FileList converted to Array of File objects)
             for (const fileData of files) {
-                const fullPath = fileData.webkitRelativePath || fileData.name;
-                const pathParts = fullPath.split('/');
+                // webkitRelativePath includes the root folder name
+                const fullPathStr = fileData.webkitRelativePath || fileData.name;
+                const pathParts = fullPathStr.split('/');
                 const fileName = pathParts[pathParts.length - 1];
                 
                 if (fileName.startsWith('.')) continue;
 
-                const extension = fileName.split('.').pop().toLowerCase();
-                // Strip the root folder name from the webkitRelativePath for consistency
-                const pathSegments = pathParts.slice(1);
-                const relativePath = pathSegments.join('/'); 
-                const fileKey = relativePath.substring(0, relativePath.lastIndexOf('.'));
+                const parts = fileName.split('.');
+                const extension = parts.length > 1 ? parts.pop().toLowerCase() : '';
+                
+                // If webkitRelativePath is available, we usually want to strip the top-level folder name 
+                // but keep everything else to match how dirHandle works.
+                const pathSegments = pathParts.length > 1 ? pathParts.slice(1) : pathParts;
+                const relativePath = pathSegments.join('/');
+                const fileKey = relativePath.includes('.') ? relativePath.substring(0, relativePath.lastIndexOf('.')) : relativePath;
 
                 if (VIDEO_EXTENSIONS.includes(extension)) {
                     const entry = mediaFilesMap.get(fileKey) || { subtitles: [] };
-                    entry.mediaHandle = fileData; // This is the actual File object
+                    entry.mediaHandle = fileData;
                     entry.path = pathSegments;
                     mediaFilesMap.set(fileKey, entry);
                 } else if (SUBTITLE_EXTENSIONS.includes(extension)) {
@@ -78,7 +83,7 @@ const workerCode = `
         }
     } catch (e) {
         console.error('Error scanning directory:', e);
-        postMessage({ type: 'error', payload: 'Failed to read directory contents.' });
+        postMessage({ type: 'error', payload: 'Failed to read directory contents. ' + e.message });
         return;
     }
     
@@ -99,11 +104,9 @@ const workerCode = `
 
     if (newEntries.length > 0) {
         postMessage({ type: 'discovered', payload: newEntries, libraryId });
-    } else if (discoveredEntries.length === 0) {
-        postMessage({ type: 'progress', payload: { progress: 100, message: 'No new video files found.' } });
-        postMessage({ type: 'complete', payload: null });
-    } else if (isRefresh) {
-        postMessage({ type: 'progress', payload: { progress: 100, message: 'Library is up to date.' } });
+    } else {
+        // Essential fail-safe: notify main thread that discovery is done even if 0 results
+        postMessage({ type: 'progress', payload: { progress: 100, message: discoveredEntries.length === 0 ? 'No video files found.' : 'Library is up to date.' } });
         postMessage({ type: 'complete', payload: null });
     }
   };
@@ -136,8 +139,9 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
 
     onUpdate({ type: 'progress', payload: { progress: 0, message: `Processing ${totalCount} files...` } });
 
-    const MAX_CONCURRENT_PROCESSORS = Math.max(2, (navigator.hardwareConcurrency || 4) - 1);
-    const BATCH_SIZE = 50;
+    // Limit concurrency for Firefox as it can be more sensitive to multiple blob accesses
+    const MAX_CONCURRENT_PROCESSORS = Math.min(4, Math.max(2, (navigator.hardwareConcurrency || 4) - 1));
+    const BATCH_SIZE = 25;
 
     const processVideo = async (videoFile: VideoFile): Promise<VideoFile | null> => {
         const video = document.createElement('video');
@@ -148,8 +152,6 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
         const ctx = canvas.getContext('2d');
         
         try {
-            // SAFE HANDLE CHECK FOR FIREFOX:
-            // Check if it's a handle (Chrome) or a raw File (Firefox)
             let file: File;
             if (typeof FileSystemHandle !== 'undefined' && videoFile.fileHandle instanceof FileSystemHandle) {
               file = await (videoFile.fileHandle as FileSystemFileHandle).getFile();
@@ -167,18 +169,22 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
                 video.src = objectUrl;
                 const cleanup = () => { URL.revokeObjectURL(objectUrl); video.removeAttribute('src'); video.load(); };
                 const timeoutId = setTimeout(() => { cleanup(); resolve({ metadata: null, poster: null, isError: true, errorDetails: { message: 'Processing timed out.' } }); }, 15000);
+                
                 let metadataResult: { duration: number; width: number; height: number } | null = null;
                 video.onloadedmetadata = () => { metadataResult = { duration: video.duration, width: video.videoWidth, height: video.videoHeight }; };
+                
                 video.onseeked = () => {
                     if (!ctx || video.videoWidth === 0) { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null }); return; }
                     canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                     ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
                     canvas.toBlob((blob) => { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: blob }); }, 'image/jpeg', 0.8);
                 };
+                
                 video.onloadeddata = () => {
                     if (!isFinite(video.duration) || video.duration <= 0) { clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null }); return; }
                     video.currentTime = Math.min(video.duration * 0.1, 10);
                 };
+                
                 video.onerror = () => {
                     const errorDetails = { code: video.error?.code, message: video.error?.message };
                     clearTimeout(timeoutId); cleanup(); resolve({ metadata: metadataResult, poster: null, isError: true, errorDetails }); 
@@ -279,8 +285,11 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
             };
         });
         
-        await db.addManyMedia(initialMedia);
+        await db.addManyManyMedia(initialMedia); // Optimized for discovery
         processMediaQueue(initialMedia);
+        break;
+      case 'complete':
+        onUpdate({ type: 'complete', payload: null });
         break;
       case 'error':
         onUpdate({ type, payload });
@@ -295,7 +304,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
         worker.onmessage = handleWorkerMessage;
         workerRef.current = worker;
         return () => { worker.terminate(); }
-    } catch(e) { console.error("Worker error:", e); }
+    } catch(e) { console.error("Worker creation failed:", e); }
   }, [handleWorkerMessage]);
 
   const startScan = useCallback((dirHandle: FileSystemDirectoryHandle | File[] | null, libraryId: string, existingMedia: VideoFile[] = []) => {
@@ -303,6 +312,7 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
       libraryIdRef.current = libraryId;
       const existingPaths = existingMedia.map(v => v.fullPath);
       
+      // File objects (Firefox/Safari) or handles (Chrome/Edge)
       if (Array.isArray(dirHandle)) {
         workerRef.current.postMessage({ files: dirHandle, libraryId, existingPaths });
       } else if (dirHandle) {
@@ -317,8 +327,10 @@ export const useVideoScanner = (onUpdate: (update: { type: string; payload: any 
     const unprocessed = allMedia.filter(v => v.isPlayable === undefined);
     if (unprocessed.length > 0) {
         processMediaQueue(unprocessed);
+    } else {
+        onUpdate({ type: 'complete', payload: null });
     }
-  }, [processMediaQueue]);
+  }, [processMediaQueue, onUpdate]);
 
   return { startScan, startProcessingUnprocessed, prioritizeMedia };
 };

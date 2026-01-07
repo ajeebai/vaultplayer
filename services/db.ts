@@ -30,7 +30,6 @@ export interface VideoFile extends MediaFile {
   };
 }
 
-// Internal types for DB stores
 interface LibraryVideo {
   libraryId: string;
   fullPath: string;
@@ -138,7 +137,7 @@ export class MediaDB {
 
     const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
     libraryMedia.mediaKey = mediaKey;
-    (libraryMedia as LibraryVideo).dateAdded = existingVideo?.dateAdded;
+    (libraryMedia as LibraryVideo).dateAdded = existingVideo?.dateAdded || media.dateAdded || Date.now();
 
     const existingMetadata = await metadataStore.get(mediaKey) as MediaMetadata | undefined;
     
@@ -159,29 +158,38 @@ export class MediaDB {
     await tx.done;
   }
 
-  async addManyMedia(mediaFiles: VideoFile[]): Promise<void> {
+  // Same as addManyMedia but with a more descriptive name and ensuring dateAdded is set
+  async addManyManyMedia(mediaFiles: VideoFile[]): Promise<void> {
     const db = await this.dbPromise;
     const tx = db.transaction([VIDEO_STORE_NAME, METADATA_STORE_NAME], 'readwrite');
     const videoStore = tx.objectStore(VIDEO_STORE_NAME);
     const metadataStore = tx.objectStore(METADATA_STORE_NAME);
+    const now = Date.now();
     
     for (const media of mediaFiles) {
         const mediaKey = generateMediaKey(media);
         const { poster, duration, width, height, tags, isFavorite, isHidden, ...libraryData } = media;
         
-        const libraryMedia: Omit<LibraryVideo, 'mediaKey'> & { mediaKey?: string } = libraryData;
-        libraryMedia.mediaKey = mediaKey;
+        const libraryMedia: LibraryVideo = {
+            ...(libraryData as LibraryVideo),
+            mediaKey,
+            dateAdded: media.dateAdded || now
+        };
 
         await videoStore.put(libraryMedia);
 
         const existingMeta = await metadataStore.get(mediaKey);
         if (!existingMeta) {
-            const skeletonMetadata: MediaMetadata = { mediaKey };
+            const skeletonMetadata: MediaMetadata = { mediaKey, tags: [], isFavorite: false, isHidden: false };
             await metadataStore.put(skeletonMetadata);
         }
     }
     
     await tx.done;
+  }
+
+  async addManyMedia(mediaFiles: VideoFile[]): Promise<void> {
+    return this.addManyManyMedia(mediaFiles);
   }
 
   async getMedia(libraryId: string, fullPath: string): Promise<VideoFile | undefined> {

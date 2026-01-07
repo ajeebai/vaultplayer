@@ -117,15 +117,17 @@ export const Library: React.FC<LibraryProps> = ({
     return displayedMedia.filter(m => allNodeMedia.some(nm => nm.fullPath === m.fullPath));
   };
 
-  // Show full-screen loader only on initial scan before any media are listed
+  // Improved loader condition: Show progress if loading and no media is displayed yet
   if (isLoading && media.length === 0 && hasLibraries) {
     return (
-      <div className="flex flex-col items-center justify-center h-screen">
+      <div className="flex flex-col items-center justify-center h-screen bg-brand-black">
         <div className="w-1/2 max-w-md">
-          <p className="text-center text-lg mb-2">{progressMessage}</p>
-          <div className="w-full bg-brand-light-gray rounded-full h-2.5">
-            <div className="bg-brand-red h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+          <h1 className="text-3xl font-black text-brand-red mb-8 text-center tracking-tighter">Scanning Library...</h1>
+          <p className="text-center text-lg mb-4 text-gray-300">{progressMessage}</p>
+          <div className="w-full bg-brand-light-gray rounded-full h-3">
+            <div className="bg-brand-red h-full rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
           </div>
+          <p className="text-center text-sm mt-4 text-gray-500">This might take a minute depending on your folder size.</p>
         </div>
       </div>
     );
@@ -137,7 +139,6 @@ export const Library: React.FC<LibraryProps> = ({
       const allNodeMedia = getAllMediaFromNode(node);
       if (mediaForNode.length === 0) return [];
 
-      // If a category has no sub-folders and we are NOT forcing a rail, display its contents in a grid.
       if (!forceRail && node.children.length === 0) {
         return [(
           <section key={node.path} className="space-y-4">
@@ -170,7 +171,6 @@ export const Library: React.FC<LibraryProps> = ({
         )];
       }
 
-      // Otherwise (it's a branch OR we are forcing a rail), display its content as a single rail.
       const videosToShow = mediaForNode.slice(0, 15);
       
       return [<Rail
@@ -252,6 +252,12 @@ export const Library: React.FC<LibraryProps> = ({
           />
         )}
         {renderCategorySections(categoryTree, true)}
+        {displayedMedia.length === 0 && !isLoading && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+            <p className="text-xl mb-4">No media found in this library.</p>
+            <p className="text-sm">Try adding a different folder or checking your folder permissions.</p>
+          </div>
+        )}
       </div>
     );
   };
@@ -270,7 +276,6 @@ export const Library: React.FC<LibraryProps> = ({
     if (currentCategoryNode) {
       const mediaForNode = getMediaForNode(currentCategoryNode);
       const allMediaForNode = getAllMediaFromNode(currentCategoryNode);
-      // If the currently selected category is a LEAF node, display a single grid of its content.
       if (currentCategoryNode.children.length === 0) {
         return (
           <>
@@ -301,14 +306,12 @@ export const Library: React.FC<LibraryProps> = ({
         );
       }
 
-      // If the currently selected category is a BRANCH node:
       const filesInFolder = displayedMedia.filter(v => v.parentPath === currentCategoryNode.path);
 
       return (
         <>
           <Breadcrumbs path={selectedCategoryPath || ''} onSelectCategory={onSelectCategory} onGoHome={onGoHome} />
           <div className="space-y-12 mt-4">
-            {/* 1. Show a rail for files directly inside this branch */}
             {filesInFolder.length > 0 && (
                 <Rail
                     title={`Files in ${currentCategoryNode.name}`}
@@ -319,25 +322,23 @@ export const Library: React.FC<LibraryProps> = ({
                     onUpdateTags={onUpdateTags}
                     onUnsupportedMedia={onUnsupportedMedia}
                     onPrioritizeMedia={onPrioritizeMedia}
-                    onSelectCategory={() => {}} // This rail's title is not for navigation
+                    onSelectCategory={() => {}} 
                     categoryPath={undefined}
                     allCategoryVideos={filesInFolder}
                     onPlayRemix={onPlayRemix}
                 />
             )}
-            {/* 2. Render its children, allowing leaf children to become grids */}
             {renderCategorySections(currentCategoryNode.children, false)}
           </div>
         </>
       );
     }
     
-    // Default home view
     return renderHomeRails();
   }
 
   return (
-    <div>
+    <div className="min-h-screen">
       {heroMedia && <Hero video={heroMedia} onPlay={() => onSelectVideo(heroMedia)} />}
       <div className={`p-4 md:p-8 ${!heroMedia ? 'pt-8' : ''}`}>
         {renderContent()}
